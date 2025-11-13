@@ -38,14 +38,26 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       head: { ...st.head },
     }
     const seen = new Set<string>()
+    //对head处理
+    const headKey = key(stroke.head.x, stroke.head.y)
+    if (!seen.has(headKey)) {
+      seen.add(headKey)
+      if (!gridMap.has(headKey)) {
+        gridMap.set(headKey, [])
+        //没有则初始化
+      }
+      // 然后push
+      gridMap.get(headKey)!.push(stroke)
+    }
     stroke.points.forEach((p) => {
-      const k = key(p.x, p.y)
+      const k = key(p.x + stroke.head.x, p.y + stroke.head.y)
       if (!seen.has(k)) {
         seen.add(k)
         if (!gridMap.has(k)) {
           //没有则初始化
           gridMap.set(k, [])
         }
+        // 然后push
         gridMap.get(k)!.push(stroke)
       }
     })
@@ -129,6 +141,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         tool: st.tool,
         now: st.now,
         width: st.width,
+        finish: st.finish,
       }
     },
     // 把世界坐标转化画布坐标

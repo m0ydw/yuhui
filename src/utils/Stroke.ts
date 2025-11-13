@@ -5,10 +5,11 @@ export function newStroke(
   head: Point = newPoint(),
   id: string = '',
   points: Point[] = [],
-  color: string = '',
+  color: string = '#000000', //‘’
   tool: string = '',
   now: number = -1,
-  width: number = 0,
+  width: number = 5, //0
+  finish: boolean = false,
 ): Stroke {
   return {
     head,
@@ -18,5 +19,6 @@ export function newStroke(
     tool,
     now,
     width,
+    finish,
   } as Stroke
 }
