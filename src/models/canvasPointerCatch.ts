@@ -41,10 +41,10 @@ export function canvasPointer(
     }
     //pushPoint
     const { offsetX, offsetY } = e
-    //与上个点重复不记录
-    if (lastPoint.x === offsetX && lastPoint.y === offsetY) {
-      return
-    }
+    //与上个点重复不记录    多余：触发move必定不重复
+    // if (lastPoint.x === offsetX && lastPoint.y === offsetY) {
+    //   return
+    // }
     //加点
     const willPush: Point = toRelativePoints(keyPoints.head, {
       x: offsetX,

@@ -30,7 +30,7 @@ export interface Board {
   resize: (width: number, height: number) => void
 }
 //工具类型
-type toolMode = 'hand' | 'pen'
+export type toolMode = 'hand' | 'pen'
 export interface myTool {
   toolName: toolMode
   penSize: number
