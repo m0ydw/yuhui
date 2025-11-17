@@ -1,69 +1,58 @@
-// 添加使用boardData.addStroke(boardData.screenToWorldStroke(keyPoints))
+import type { Board, strokeFlow, toolMode } from './types'
+import toolBarData from '@/stores/toolBarStores'
 
-import { newStroke, newPoint } from '@/utils'
-import type { Point, Board, strokeFlow, Stroke } from './types'
-import { toRelativePoints } from '@/utils'
+import { pen_Down, pen_Move, pen_Up } from './toolBar/pen'
+import { hand_Down, hand_Move, hand_Up } from './toolBar/hand'
 export function canvasPointer(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
   board: Board,
   userQueue: strokeFlow,
 ) {
-  let lastPoint: Point = newPoint()
-  let keyPoints: Stroke
-  let isDrawing = false
+  let toolData = toolBarData()
+  let isDown = false
   const mouseDown = (e: PointerEvent) => {
-    keyPoints = newStroke()
-    const { offsetX, offsetY } = e
-    isDrawing = true
+    isDown = true
     canvas.setPointerCapture(e.pointerId) //拦截
     window.addEventListener('pointermove', mouseMove)
     window.addEventListener('pointerup', mouseUp)
-    lastPoint = { x: offsetX, y: offsetY, t: Date.now() }
-    //笔画初始化
-    keyPoints.head = { ...lastPoint }
-    keyPoints.points.push({ x: 0, y: 0, t: lastPoint.t, p: lastPoint.p })
-    //id
-    //points
-    // keyPoints.color
-    // keyPoints.tool
-    // keyPoints.width
-    //size??
-    //设置样式
-    ctx.strokeStyle = '#000000'
-    ctx.lineWidth = 5
-    //队列新建笔画
-    userQueue.pushStroke(keyPoints)
+    switch (toolData.nowTool) {
+      case 'hand':
+        hand_Down(e)
+        break
+      case 'pen':
+        pen_Down(e, ctx, userQueue)
+        break
+    }
   }
   const mouseMove = (e: PointerEvent) => {
-    if (!isDrawing) {
+    if (!isDown) {
       return
     }
-    //pushPoint
-    const { offsetX, offsetY } = e
-    //与上个点重复不记录    多余：触发move必定不重复
-    // if (lastPoint.x === offsetX && lastPoint.y === offsetY) {
-    //   return
-    // }
-    //加点
-    const willPush: Point = toRelativePoints(keyPoints.head, {
-      x: offsetX,
-      y: offsetY,
-      t: Date.now(),
-    })
-    userQueue.pushPoint({ ...willPush })
+    switch (toolData.nowTool) {
+      case 'hand':
+        hand_Move(e, board, ctx, canvas)
+        break
+      case 'pen':
+        pen_Move(e, userQueue)
+        break
+    }
   }
 
   const mouseUp = (e: PointerEvent) => {
-    userQueue.setFinish()
-    isDrawing = false
+    isDown = false
     //清除挂载
+    switch (toolData.nowTool) {
+      case 'hand':
+        hand_Up()
+        break
+      case 'pen':
+        pen_Up(userQueue, board)
+        break
+    }
     canvas.releasePointerCapture(e.pointerId)
     window.removeEventListener('pointermove', mouseMove)
     window.removeEventListener('pointerup', mouseUp)
-
-    //笔画加入表格
-    board.addStroke(board.screenToWorldStroke(keyPoints))
   }
   //监听mousedown
   canvas.addEventListener('pointerdown', mouseDown)

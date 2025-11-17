@@ -151,10 +151,11 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     //渲染
     render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void =>
       _render(ctx, canvas),
-    //控制视图
-    setPan: (x: number, y: number) => {
-      panX = x
-      panY = y
+    //控制视图(传入相对位置)
+    setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      panX += x
+      panY += y
+      _render(ctx, canvas)
     },
     setZoom: (z: number) => {
       zoom = z

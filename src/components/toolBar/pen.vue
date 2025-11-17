@@ -1,5 +1,5 @@
 <template>
-  <div class="hand" @click="toolData.setTool('hand')"></div>
+  <div class="pen" @click="toolData.setTool('pen')"></div>
 </template>
 
 <script setup lang="ts">
@@ -8,9 +8,9 @@ let toolData = toolBarData()
 </script>
 
 <style>
-.toolBar .hand {
-  background-color: blue;
+.toolBar .pen {
   width: 50px;
   height: 50px;
+  background-color: brown;
 }
 </style>

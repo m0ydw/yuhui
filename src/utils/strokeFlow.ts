@@ -110,7 +110,12 @@ export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: 
       }
     },
     //新建用户
-
+    newUser(id: number) {
+      allFlow.set(id, newUserFlow())
+    },
     //删除用户
+    delUser(id: number) {
+      allFlow.delete(id)
+    },
   }
 }

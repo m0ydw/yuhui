@@ -2,6 +2,7 @@
 
   <div class="toolBar" :style="positionStyle" ref="main">
     <hand></hand>
+    <pen></pen>
     <div class="move" ref="move"></div>
   </div>
 </template>
@@ -10,6 +11,7 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { toolBarPointer } from '@/models';
 import hand from './toolBar/hand.vue'
+import pen from './toolBar/pen.vue';
 const position = ref({ x: 0, y: 0 })
 const move = ref<HTMLDivElement | null>(null)
 const main = ref<HTMLDivElement | null>(null)

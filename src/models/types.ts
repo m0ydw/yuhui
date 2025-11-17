@@ -25,7 +25,7 @@ export interface Board {
   worldToScreen: (wx: number, wy: number) => Point
   addStroke: (stroke: Stroke) => void
   render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
-  setPan: (x: number, y: number) => void
+  setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setZoom: (z: number) => void
   resize: (width: number, height: number) => void
 }
@@ -122,9 +122,11 @@ export class StrokeQueue {
 export interface allFlowItem {
   strokes: StrokeQueue
 }
-//总体的
+//
 export interface strokeFlow {
   pushPoint: (pt: Point, id?: number) => void
   pushStroke: (stroke: Stroke, id?: number) => void
   setFinish: (id?: number) => void
+  newUser: (id: number) => void
+  delUser: (id: number) => void
 }
