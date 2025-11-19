@@ -124,9 +124,9 @@ export interface allFlowItem {
 }
 //
 export interface strokeFlow {
-  pushPoint: (pt: Point, id?: number) => void
-  pushStroke: (stroke: Stroke, id?: number) => void
-  setFinish: (id?: number) => void
-  newUser: (id: number) => void
-  delUser: (id: number) => void
+  pushPoint: (pt: Point, id?: string) => void
+  pushStroke: (stroke: Stroke, id?: string) => void
+  setFinish: (id?: string) => void
+  newUser: (id: string) => void
+  delUser: (id: string) => void
 }

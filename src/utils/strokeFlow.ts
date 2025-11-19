@@ -12,11 +12,15 @@ function newUserFlow(): allFlowItem {
   }
 }
 
-export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: Board): strokeFlow {
+export function newStrokeFlow(
+  id: string = '0',
+  ct: CanvasRenderingContext2D,
+  bd: Board,
+): strokeFlow {
   const ctx = ct
   const myId = id
   //默认是一个
-  const allFlow = new Map<number, allFlowItem>([[myId, newUserFlow()]])
+  const allFlow = new Map<string, allFlowItem>([[myId, newUserFlow()]])
   let isRender: boolean = false
   function startRender() {
     if (!isRender) {
@@ -82,7 +86,7 @@ export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: 
     }
   }
   return {
-    pushPoint(pt: Point, id: number = myId) {
+    pushPoint(pt: Point, id: string = myId) {
       //不传id时获取自己的队列
       const myQueue = allFlow.get(id)
       if (myQueue) {
@@ -91,7 +95,7 @@ export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: 
       //开始渲染
       startRender()
     },
-    pushStroke(stroke: Stroke, id: number = myId) {
+    pushStroke(stroke: Stroke, id: string = myId) {
       const myQueue = allFlow.get(id)
       if (myQueue) {
         myQueue.strokes.enqueueNewStroke(stroke)
@@ -100,7 +104,7 @@ export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: 
       startRender()
     },
     //自己的finish
-    setFinish(id: number = myId) {
+    setFinish(id: string = myId) {
       const myQueue = allFlow.get(id)
       if (myQueue) {
         const last = myQueue.strokes.getTeil()
@@ -110,11 +114,11 @@ export function newStrokeFlow(id: number = 0, ct: CanvasRenderingContext2D, bd: 
       }
     },
     //新建用户
-    newUser(id: number) {
+    newUser(id: string) {
       allFlow.set(id, newUserFlow())
     },
     //删除用户
-    delUser(id: number) {
+    delUser(id: string) {
       allFlow.delete(id)
     },
   }

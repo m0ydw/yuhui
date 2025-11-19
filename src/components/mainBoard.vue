@@ -5,8 +5,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, shallowRef, onMounted, onUnmounted } from 'vue'
-import { canvasPointer, type Board, type Stroke } from '@/models'
+import { ref, shallowRef, onMounted, onUnmounted, computed, watch } from 'vue'
+import { canvasPointer, type Board, type Stroke, type strokeFlow } from '@/models'
 import {
   newStrokeFlow,
   newStroke,
@@ -15,6 +15,18 @@ import {
   throttle,
   newBoard,
 } from '@/utils'
+import { useRoute, useRouter } from 'vue-router'
+import { myWebsocketClient } from '@/models/webSocket/cilentExample'
+const router = useRouter()
+const route = useRoute()
+let hasPlayer = false
+//输入队列
+let userQueue: null | ReturnType<typeof newStrokeFlow> = null
+let userId = '0'
+// // 进入单人模式
+// router.push('/draw')
+// 进入多人模式，指定房间
+// router.push('/draw?mode=multi&roomId=room123')
 const canvas = shallowRef()
 const ctx = shallowRef()
 const windowVw = ref()
@@ -23,8 +35,20 @@ let boardData: Board | undefined = undefined
 //清理函数
 let cleanup: (() => void) | null = null
 //初始化
-onMounted(() => {
+onMounted(async () => {
+  //确定模式
+  await router.isReady()
+  const roomId = route.query.roomId
+  if (roomId) {
+    //多人
+    userId = await myWebsocketClient.connect()
+    //尝试加入对应room
+    hasPlayer = true
+  } else {
+    //单人
+  }
   canvas.value = document.getElementById('drawboard')
+  //核心逻辑
   if (canvas.value) {
     windowVw.value = window.innerWidth
     windowVh.value = window.innerHeight
@@ -33,7 +57,7 @@ onMounted(() => {
     //board实例
     boardData = newBoard(1024, windowVw, windowVh)
     //创建用户队列
-    const userQueue = newStrokeFlow(0, ctx.value, boardData)
+    userQueue = newStrokeFlow(userId, ctx.value, boardData)
     //注册监听
     cleanup = canvasPointer(canvas.value, ctx.value, boardData, userQueue)
     // 初次渲染
@@ -44,8 +68,13 @@ onMounted(() => {
         'resize',
         throttle(() => resizeCanvas(canvas.value, windowVw, windowVh, boardData!, ctx.value), 10),
       )
-
     //初始绘图样式？
+  }
+  //不同的逻辑
+  if (hasPlayer) {
+
+  } else {
+
   }
 })
 
@@ -54,13 +83,7 @@ onUnmounted(() => {
   cleanup?.()
 })
 
-//props
-interface Props {
-  catch?: Stroke
-}
-const props = withDefaults(defineProps<Props>(), {
-  catch: () => newStroke(),
-})
+
 </script>
 
 <style scoped></style>
