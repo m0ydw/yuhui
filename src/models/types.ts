@@ -91,6 +91,13 @@ export class StrokeQueue {
     }
     tailStroke.points.push(point)
   }
+  appendPoints(pts: Point[]): void {
+    const tailStroke = this.getTeil() as Stroke
+    if (!tailStroke) {
+      throw new Error('队列空，无法追加点')
+    }
+    tailStroke.points.push(...pts)
+  }
   finishRender(): Stroke {
     //移除首元素
     if (this.isEmpty()) {
@@ -129,4 +136,5 @@ export interface strokeFlow {
   setFinish: (id?: string) => void
   newUser: (id: string) => void
   delUser: (id: string) => void
+  pushOtherPoints: (pts: Point[], id: string) => void
 }

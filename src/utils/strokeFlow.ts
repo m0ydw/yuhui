@@ -1,3 +1,9 @@
+// 发送
+//节流配置
+const SEND_INTERVAL = 16 // 60fps，约16ms发送一次
+const BATCH_SIZE = 15 // 累积15个点或距离超过阈值也发送
+const DISTANCE_THRESHOLD = 20 // 点之间像素距离超过20立即发送
+
 import {
   StrokeQueue,
   type allFlowItem,
@@ -6,12 +12,59 @@ import {
   type strokeFlow,
   type Board,
 } from '@/models/types'
+import { distanceTwoPoints } from './pointUtils'
+import { sendNewStroke, sendStrokePoints, sendStrokeFinish } from '@/models'
 function newUserFlow(): allFlowItem {
   return {
     strokes: new StrokeQueue(),
   }
 }
+import { myWebsocketClient } from '@/models/webSocket/cilentExample'
+//点的组队发送，节流
+function sendThrottler() {
+  let willSend: Point[] = []
+  let lastPoint: Point | null = null
+  let lastTime = 0
 
+  function send(id: string) {
+    myWebsocketClient.send(sendStrokePoints(willSend, id))
+    willSend = []
+    lastTime = Date.now()
+  }
+
+  return {
+    //确保第一次不会直接发送
+    newStroke() {
+      lastTime = Date.now()
+    },
+    addPoint(pt: Point, id: string) {
+      willSend.push(pt)
+      const now = Date.now()
+      const lastToNow = now - lastTime
+      let distance = 0
+      if (lastPoint) {
+        distance = distanceTwoPoints(lastPoint, pt)
+      }
+      //条件
+      const shouldSend =
+        lastToNow >= SEND_INTERVAL || // 时间到了
+        willSend.length >= BATCH_SIZE || // 点攒够了
+        distance >= DISTANCE_THRESHOLD
+      if (shouldSend) {
+        send(id)
+      }
+      //状态更新
+      lastPoint = pt
+    },
+    oneFinish(id: string) {
+      //绘画结束(置空)发送
+      send(id)
+      willSend = []
+      lastPoint = null
+    },
+  }
+}
+const myThrotter = sendThrottler()
 export function newStrokeFlow(
   id: string = '0',
   ct: CanvasRenderingContext2D,
@@ -44,7 +97,6 @@ export function newStrokeFlow(
         if (nowRender.finish && nowRender.now === nowRender.points.length - 1) {
           //去除第一个笔画同时加入board中
           const willAdd = value.strokes.finishRender()
-          console.log(willAdd)
           bd.addStroke(bd.screenToWorldStroke(willAdd))
           //之后如果为空就clear（防止number溢出）
           if (value.strokes.isEmpty()) {
@@ -94,6 +146,10 @@ export function newStrokeFlow(
       }
       //开始渲染
       startRender()
+      //多人时加入点
+      if (id !== '0' && id === myId) {
+        myThrotter.addPoint(pt, id)
+      }
     },
     pushStroke(stroke: Stroke, id: string = myId) {
       const myQueue = allFlow.get(id)
@@ -102,14 +158,28 @@ export function newStrokeFlow(
       }
       //开始渲染
       startRender()
+      //发送
+      if (id !== '0' && id === myId) {
+        myThrotter.newStroke()
+        myWebsocketClient.send(sendNewStroke(myId, stroke))
+      }
     },
     //自己的finish
     setFinish(id: string = myId) {
       const myQueue = allFlow.get(id)
       if (myQueue) {
+        //守卫
         const last = myQueue.strokes.getTeil()
         if (last) {
+          //守卫
           last.finish = true
+          if (id !== '0' && id === myId) {
+            //多人条件判断
+            // 发送并置空
+            myThrotter.oneFinish(id)
+            // 发送完成的消息
+            myWebsocketClient.send(sendStrokeFinish(id))
+          }
         }
       }
     },
@@ -120,6 +190,12 @@ export function newStrokeFlow(
     //删除用户
     delUser(id: string) {
       allFlow.delete(id)
+    },
+    pushOtherPoints(pts: Point[], id: string) {
+      const Queue = allFlow.get(id)
+      if (Queue) {
+        Queue.strokes.appendPoints(pts)
+      }
     },
   }
 }

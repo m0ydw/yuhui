@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { ref, shallowRef, onMounted, onUnmounted, computed, watch } from 'vue'
-import { canvasPointer, type Board, type Stroke, type strokeFlow } from '@/models'
+import { canvasPointer, type Board, type Stroke, type strokeFlow, sendIAmJoin, addMainBoardEvent } from '@/models'
 import {
   newStrokeFlow,
   newStroke,
@@ -26,7 +26,7 @@ let userId = '0'
 // // 进入单人模式
 // router.push('/draw')
 // 进入多人模式，指定房间
-// router.push('/draw?mode=multi&roomId=room123')
+// router.push('')
 const canvas = shallowRef()
 const ctx = shallowRef()
 const windowVw = ref()
@@ -43,6 +43,21 @@ onMounted(async () => {
     //多人
     userId = await myWebsocketClient.connect()
     //尝试加入对应room
+    myWebsocketClient.send(sendIAmJoin(roomId.toString(), userId))
+
+    //等待服务器响应
+    const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
+    console.log('响应')
+    switch (joinRes.data.status) {
+      case true:
+        console.log('连接成功')
+        break
+
+      case false:
+        console.log('连接失败')
+        break
+    }
+    //成功发送
     hasPlayer = true
   } else {
     //单人
@@ -71,8 +86,9 @@ onMounted(async () => {
     //初始绘图样式？
   }
   //不同的逻辑
-  if (hasPlayer) {
-
+  if (hasPlayer && userQueue) {
+    //挂载监听
+    addMainBoardEvent(myWebsocketClient, userQueue)
   } else {
 
   }
