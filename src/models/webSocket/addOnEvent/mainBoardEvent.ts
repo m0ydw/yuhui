@@ -22,6 +22,10 @@ export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<type
     client.on('finishStroke', (data) => {
       const aim = data.data
       Flow.setFinish(aim.user)
+    }),
+    client.on('whoExit', (data) => {
+      const aim = data.data
+      Flow.delUser(aim.user)
     }))
   //退出
 }

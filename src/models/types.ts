@@ -28,6 +28,12 @@ export interface Board {
   setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setZoom: (z: number) => void
   resize: (width: number, height: number) => void
+  screenToWorld: (pt: Point) => Point
+  toWorldX: (x: number) => number
+  toWorldY: (y: number) => number
+  getPanx: () => number
+  getPany: () => number
+  initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
 }
 //工具类型
 export type toolMode = 'hand' | 'pen'
@@ -137,4 +143,6 @@ export interface strokeFlow {
   newUser: (id: string) => void
   delUser: (id: string) => void
   pushOtherPoints: (pts: Point[], id: string) => void
+  getBoard: () => Board
+  newOthers: (others: string[]) => void
 }

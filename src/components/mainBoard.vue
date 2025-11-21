@@ -23,6 +23,8 @@ let hasPlayer = false
 //输入队列
 let userQueue: null | ReturnType<typeof newStrokeFlow> = null
 let userId = '0'
+let others: string[] | null = []
+let History: Stroke[] | null = []
 // // 进入单人模式
 // router.push('/draw')
 // 进入多人模式，指定房间
@@ -47,7 +49,9 @@ onMounted(async () => {
 
     //等待服务器响应
     const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
-    console.log('响应')
+    console.log('响应', joinRes)
+    others = joinRes.data.others
+    History = joinRes.data.history
     switch (joinRes.data.status) {
       case true:
         console.log('连接成功')
@@ -87,8 +91,19 @@ onMounted(async () => {
   }
   //不同的逻辑
   if (hasPlayer && userQueue) {
+    //初始化queue
+    if (others)
+      userQueue.newOthers(others)
+    //初始化历史操作
+    if (History && boardData)
+      boardData.initBoard(History, ctx.value, canvas.value)
+
     //挂载监听
     addMainBoardEvent(myWebsocketClient, userQueue)
+
+    //取消引用释放内存
+    others = null
+    History = null
   } else {
 
   }

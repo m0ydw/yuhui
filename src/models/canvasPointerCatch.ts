@@ -12,16 +12,19 @@ export function canvasPointer(
   let toolData = toolBarData()
   let isDown = false
   const mouseDown = (e: PointerEvent) => {
+    const { offsetX, offsetY } = e
+    let x = board.toWorldX(offsetX)
+    let y = board.toWorldY(offsetY)
     isDown = true
     canvas.setPointerCapture(e.pointerId) //拦截
     window.addEventListener('pointermove', mouseMove)
     window.addEventListener('pointerup', mouseUp)
     switch (toolData.nowTool) {
       case 'hand':
-        hand_Down(e)
+        hand_Down(offsetX, offsetY)
         break
       case 'pen':
-        pen_Down(e, ctx, userQueue)
+        pen_Down(ctx, userQueue, board, x, y)
         break
     }
   }
@@ -29,12 +32,15 @@ export function canvasPointer(
     if (!isDown) {
       return
     }
+    const { offsetX, offsetY } = e
+    let x = board.toWorldX(offsetX)
+    let y = board.toWorldY(offsetY)
     switch (toolData.nowTool) {
       case 'hand':
-        hand_Move(e, board, ctx, canvas)
+        hand_Move(board, ctx, canvas, offsetX, offsetY)
         break
       case 'pen':
-        pen_Move(e, userQueue)
+        pen_Move(userQueue, x, y)
         break
     }
   }

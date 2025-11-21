@@ -18,7 +18,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     return {
       x: (pt.x - panX) / zoom,
       y: (pt.y - panY) / zoom,
-      t: Infinity,
+      t: pt.t,
       p: pt.p,
     }
   }
@@ -163,6 +163,17 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     resize: (width: number, height: number) => {
       vw.value = width
       vh.value = height
+    },
+    screenToWorld: (pt: Point) => _screenToWorld(pt),
+    getPanx: () => panX,
+    getPany: () => panY,
+    toWorldX: (x: number) => (x - panX) / zoom,
+    toWorldY: (y: number) => (y - panY) / zoom,
+    initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      history.forEach((value) => {
+        _addStroke(value)
+      })
+      _render(ctx, canvas)
     },
   }
 }

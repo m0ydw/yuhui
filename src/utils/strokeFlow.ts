@@ -13,7 +13,7 @@ import {
   type Board,
 } from '@/models/types'
 import { distanceTwoPoints } from './pointUtils'
-import { sendNewStroke, sendStrokePoints, sendStrokeFinish } from '@/models'
+import { sendNewStroke, sendStrokePoints, sendStrokeFinish, sendHistoryToserver } from '@/models'
 function newUserFlow(): allFlowItem {
   return {
     strokes: new StrokeQueue(),
@@ -97,7 +97,8 @@ export function newStrokeFlow(
         if (nowRender.finish && nowRender.now === nowRender.points.length - 1) {
           //去除第一个笔画同时加入board中
           const willAdd = value.strokes.finishRender()
-          bd.addStroke(bd.screenToWorldStroke(willAdd))
+          // console.log(willAdd)
+          bd.addStroke(willAdd)
           //之后如果为空就clear（防止number溢出）
           if (value.strokes.isEmpty()) {
             // value.strokes.clear()
@@ -108,16 +109,20 @@ export function newStrokeFlow(
           ctx.beginPath()
           const last = nowRender.points[nowRender.now]
           if (last) {
-            ctx.moveTo(nowRender.head.x + last.x, nowRender.head.y + last.y)
+            ctx.moveTo(
+              nowRender.head.x + bd.getPanx() + last.x,
+              nowRender.head.y + bd.getPany() + last.y,
+            )
           }
           //准备样式
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
+          ctx.lineWidth = nowRender.width
           //绘图开始
           for (let i = nowRender.now + 1; i < nowRender.points.length; i++) {
             ctx.lineTo(
-              (nowRender.points[i] as Point).x + nowRender.head.x,
-              (nowRender.points[i] as Point).y + nowRender.head.y,
+              (nowRender.points[i] as Point).x + nowRender.head.x + bd.getPanx(),
+              (nowRender.points[i] as Point).y + nowRender.head.y + bd.getPany(),
             )
           }
           ctx.stroke()
@@ -179,6 +184,8 @@ export function newStrokeFlow(
             myThrotter.oneFinish(id)
             // 发送完成的消息
             myWebsocketClient.send(sendStrokeFinish(id))
+            //发送历史记录
+            myWebsocketClient.send(sendHistoryToserver(last))
           }
         }
       }
@@ -196,6 +203,17 @@ export function newStrokeFlow(
       if (Queue) {
         Queue.strokes.appendPoints(pts)
       }
+    },
+    newOthers(others: string[]) {
+      others.forEach((value, index) => {
+        if (!allFlow.has(value)) {
+          //没有就新建
+          allFlow.set(value, newUserFlow())
+        }
+      })
+    },
+    getBoard() {
+      return bd
     },
   }
 }

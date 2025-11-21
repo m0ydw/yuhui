@@ -35,3 +35,11 @@ export function sendStrokeFinish(id: string) {
     },
   })
 }
+export function sendHistoryToserver(aim: Stroke) {
+  return JSON.stringify({
+    type: 'HistoryStorke',
+    data: {
+      pts: aim,
+    },
+  })
+}
