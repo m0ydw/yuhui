@@ -1,5 +1,5 @@
 <template>
-  <div class="hand" @click="toolData.setTool('hand')"></div>
+  <div class="hand" @pointerdown="toolData.setTool('hand')"></div>
 </template>
 
 <script setup lang="ts">

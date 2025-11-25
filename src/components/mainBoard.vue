@@ -1,22 +1,30 @@
 <template>
   <div>
     <canvas width="600" height="600" id="drawboard"></canvas>
+    <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData"></scale>
   </div>
 </template>
 
 <script setup lang="ts">
+import scale from './toolBar/scale.vue'
 import { ref, shallowRef, onMounted, onUnmounted, computed, watch } from 'vue'
-import { canvasPointer, type Board, type Stroke, type strokeFlow, sendIAmJoin, addMainBoardEvent } from '@/models'
 import {
-  newStrokeFlow,
-  newStroke,
-  setupHighResolutionCanvas,
-  resizeCanvas,
-  throttle,
-  newBoard,
+  canvasPointer,//捕获指针至canvas
+  type Board, type Stroke,
+  sendIAmJoin,//发送信息的封装
+  addMainBoardEvent,//挂载websocket事件
+} from '@/models'
+import {
+  newStrokeFlow,//新建用户队列
+  setupHighResolutionCanvas,//高分辨率canvas
+  resizeCanvas,//挂载缩放事件
+  throttle,//节流
+  newBoard,//new一个board二维表格空间
 } from '@/utils'
 import { useRoute, useRouter } from 'vue-router'
-import { myWebsocketClient } from '@/models/webSocket/cilentExample'
+import {
+  myWebsocketClient//websocket实例
+} from '@/models/webSocket/cilentExample'
 const router = useRouter()
 const route = useRoute()
 let hasPlayer = false
@@ -34,6 +42,7 @@ const ctx = shallowRef()
 const windowVw = ref()
 const windowVh = ref()
 let boardData: Board | undefined = undefined
+let boardReady = ref(false)
 //清理函数
 let cleanup: (() => void) | null = null
 //初始化
@@ -75,6 +84,7 @@ onMounted(async () => {
     ctx.value = setupHighResolutionCanvas(canvas.value)
     //board实例
     boardData = newBoard(1024, windowVw, windowVh)
+    boardReady.value = true
     //创建用户队列
     userQueue = newStrokeFlow(userId, ctx.value, boardData)
     //注册监听
@@ -89,7 +99,7 @@ onMounted(async () => {
       )
     //初始绘图样式？
   }
-  //不同的逻辑
+  //不同的逻辑(多人)
   if (hasPlayer && userQueue) {
     //初始化queue
     if (others)

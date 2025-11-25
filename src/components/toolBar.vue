@@ -1,5 +1,4 @@
 <template>
-
   <div class="toolBar" :style="positionStyle" ref="main">
     <hand></hand>
     <pen></pen>

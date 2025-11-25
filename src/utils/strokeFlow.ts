@@ -97,37 +97,38 @@ export function newStrokeFlow(
         if (nowRender.finish && nowRender.now === nowRender.points.length - 1) {
           //去除第一个笔画同时加入board中
           const willAdd = value.strokes.finishRender()
-          // console.log(willAdd)
+          console.log(willAdd)
           bd.addStroke(willAdd)
           //之后如果为空就clear（防止number溢出）
           if (value.strokes.isEmpty()) {
             // value.strokes.clear()
           }
         } else {
+          ctx.save()
+          ctx.translate(bd.getPanx(), bd.getPany())
+          ctx.scale(bd.getZoom(), bd.getZoom())
           //否则渲染
           //先移动到上个点的位置
           ctx.beginPath()
           const last = nowRender.points[nowRender.now]
           if (last) {
-            ctx.moveTo(
-              nowRender.head.x + bd.getPanx() + last.x,
-              nowRender.head.y + bd.getPany() + last.y,
-            )
+            ctx.moveTo(nowRender.head.x + last.x, nowRender.head.y + last.y)
           }
           //准备样式
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
           ctx.lineWidth = nowRender.width
+
           //绘图开始
           for (let i = nowRender.now + 1; i < nowRender.points.length; i++) {
-            ctx.lineTo(
-              (nowRender.points[i] as Point).x + nowRender.head.x + bd.getPanx(),
-              (nowRender.points[i] as Point).y + nowRender.head.y + bd.getPany(),
-            )
+            let x = (nowRender.points[i] as Point).x + nowRender.head.x
+            let y = (nowRender.points[i] as Point).y + nowRender.head.y
+            ctx.lineTo(x, y)
           }
           ctx.stroke()
           //更新已渲染的部分标记
           nowRender.now = nowRender.points.length - 1
+          ctx.restore()
         }
       } else {
         //渲染完成

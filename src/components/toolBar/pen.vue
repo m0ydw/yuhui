@@ -1,10 +1,15 @@
 <template>
-  <div class="pen" @click="toolData.setTool('pen')"></div>
+  <div class="pen" @pointerdown=""></div>
 </template>
 
 <script setup lang="ts">
 import toolBarData from '@/stores/toolBarStores';
 let toolData = toolBarData()
+const pointerDown = (e: PointerEvent) => {
+  const el = e.currentTarget as HTMLElement
+  el.setPointerCapture(e.pointerId)
+  toolData.setTool('pen')
+}
 </script>
 
 <style>

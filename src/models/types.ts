@@ -26,9 +26,15 @@ export interface Board {
   addStroke: (stroke: Stroke) => void
   render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
-  setZoom: (z: number) => void
+  setZoom: (
+    z: number,
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    thisX?: number,
+    thisY?: number,
+  ) => void
+  getZoom: () => number
   resize: (width: number, height: number) => void
-  screenToWorld: (pt: Point) => Point
   toWorldX: (x: number) => number
   toWorldY: (y: number) => number
   getPanx: () => number

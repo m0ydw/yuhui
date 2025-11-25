@@ -117,7 +117,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     // 渲染 stroke
     _strokesInView().forEach((stroke) => {
       ctx.strokeStyle = stroke.color
-      ctx.lineWidth = stroke.width / zoom // 恒定屏幕宽度
+      ctx.lineWidth = stroke.width
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.beginPath()
@@ -157,14 +157,34 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       panY += y
       _render(ctx, canvas)
     },
-    setZoom: (z: number) => {
+    getZoom: (): number => {
+      return zoom
+    },
+    setZoom: (
+      z: number,
+      ctx: CanvasRenderingContext2D,
+      canvas: HTMLCanvasElement,
+      thisX: number = NaN, //二者是传入的canvas的坐标
+      thisY: number = NaN,
+    ) => {
+      // 1. 画布中心
+      const cx = thisX || canvas.clientWidth / 2
+      const cy = thisY || canvas.clientHeight / 2
+
+      // 2. 旧 zoom 下中心对应的世界坐标
+      const worldCX = (cx - panX) / zoom
+      const worldCY = (cy - panY) / zoom
+      //zoom修改
       zoom = z
+      // 4. 保持该中心点在屏幕中心不动
+      panX = cx - worldCX * zoom
+      panY = cy - worldCY * zoom
+      _render(ctx, canvas)
     },
     resize: (width: number, height: number) => {
       vw.value = width
       vh.value = height
     },
-    screenToWorld: (pt: Point) => _screenToWorld(pt),
     getPanx: () => panX,
     getPany: () => panY,
     toWorldX: (x: number) => (x - panX) / zoom,
