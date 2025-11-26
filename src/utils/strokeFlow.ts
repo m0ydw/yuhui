@@ -118,6 +118,10 @@ export function newStrokeFlow(
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
           ctx.lineWidth = nowRender.width
+          ctx.strokeStyle = nowRender.color
+          // 锯齿感？
+          ctx.shadowBlur = 10
+          ctx.shadowColor = nowRender.color
 
           //绘图开始
           for (let i = nowRender.now + 1; i < nowRender.points.length; i++) {

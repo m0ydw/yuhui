@@ -9,21 +9,32 @@ const toolBarData = defineStore('toolBar', () => {
   function setTool(tool: toolMode) {
     nowTool.value = tool
   }
-
-  //selectBar
+  /*               selectBar是否展示        */
   const displaySelectBar = ref(false)
   //获取和改变
   function isNeedDisplay() {
     return displaySelectBar.value
   }
   function changeSelectBar(aim: boolean) {
-    displaySelectBar.value = aim
+    if (displaySelectBar.value !== aim) displaySelectBar.value = aim
+  }
+  //pen的相关值
+  const nowColor = ref('#000000')
+  //改变color
+  function changeNowColor(aim: string) {
+    console.log(aim)
+    nowColor.value = `#${aim}`
+  }
+  function getNowColor() {
+    return nowColor.value
   }
   return {
     nowTool,
     setTool,
     isNeedDisplay,
     changeSelectBar,
+    changeNowColor,
+    getNowColor,
   }
 })
 

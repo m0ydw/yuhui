@@ -120,6 +120,9 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       ctx.lineWidth = stroke.width
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
+      // 锯齿感？
+      ctx.shadowBlur = 1
+      ctx.shadowColor = stroke.color
       ctx.beginPath()
       ctx.moveTo(stroke.head.x, stroke.head.y)
       stroke.points.forEach((p) => {

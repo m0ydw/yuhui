@@ -4,7 +4,10 @@
     <div class="panel" ref="panel">
       <canvas :width="panelWidth" :height="panelHeight" ref="canvas"></canvas>
       <!-- 点 -->
-      <div class="dot" :style="{ left: dot.x + 'px', top: dot.y + 'px' }"></div>
+      <div class="dot" :style="{
+        left: (dot.x) + 'px',
+        top: (dot.y) + 'px'
+      }"></div>
     </div>
     <!-- 1. 主色调 Hue 滑条 -->
     <div class="hue-track" ref="hueTrack">
@@ -20,20 +23,23 @@
       <div class="alpha-thumb" :style="{ left: alphaThumb + 'px' }"></div>
     </div>
 
-    <!-- 4. 结果 -->
+    <!-- 4. 结果 & 输入 -->
     <div class="swatch">
-      <!-- 背景 -->
-      <div class="backImg" :style="{ backgroundImage: `url(${checkerboard})` }"></div>
-      <!-- 结果 -->
-      <div class="color" :style="{ background: rgbaStr }"></div>
+      <div class="backImg" :style="{ backgroundImage: `url(${checkerboard})` }" />
+      <div class="color" :style="{ background: rgbaStr }" />
     </div>
-    <div class="hex">{{ rrggbbaa }}</div>
+
+    <!-- 点击 div 变成输入框 -->
+    <div v-if="!editing" class="hex-display" @click="startEdit">{{ rrggbbaa }}</div>
+    <input v-else ref="hexInputEl" v-model="editText" class="hex" @keyup.enter="finishEdit" @blur="finishEdit" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive, watch } from 'vue'
-
+import { ref, computed, onMounted, reactive, watch, nextTick } from 'vue'
+import toolBarData from '@/stores/toolBarStores';
+// pinia
+const toolBarStore = toolBarData()
 /* ---------- props ---------- */
 const props = withDefaults(defineProps<{
   panelWidth?: number
@@ -48,6 +54,9 @@ const canvas = ref<HTMLCanvasElement>()
 const panel = ref<HTMLElement>()
 const hueTrack = ref<HTMLElement>()
 const alphaTrack = ref<HTMLElement>()
+const editing = ref(false)
+const editText = ref('')          // 编辑时的临时文本
+const hexInputEl = ref<HTMLInputElement>()
 //背景图
 const checkerboard = `
 data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiNmZmYiLz48cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjY2NjIi8+PHJlY3QgeD0iNCIgeT0iNCIgd2lkdGg9IjQiIGhlaWdodD0iNCIgZmlsbD0iI2NjYyIvPjwvc3ZnPg==
@@ -64,6 +73,9 @@ const rrggbbaa = computed(() => {
   const [r, g, b] = rgba.value
   return `${toHex(r)}${toHex(g)}${toHex(b)}${toHex(alpha.value)}`
 })
+watch(rgba, () => {
+  toolBarStore.changeNowColor(rrggbbaa.value)
+})
 const rgbaStr = computed(() => {
   const [r, g, b] = rgba.value
   return `rgba(${r},${g},${b},${alpha.value / 255})`
@@ -74,6 +86,61 @@ const alphaGradient = computed(
   () =>
     `linear-gradient(to right, hsl(${hue.value}, 100%, 50%, 0) 0%, hsl(${hue.value}, 100%, 50%, 1) 100%)`
 )
+/* ---------- 进入编辑 ---------- */
+function startEdit() {
+  editing.value = true
+  editText.value = rrggbbaa.value          // 把当前计算属性值带进来
+  nextTick(() => hexInputEl.value?.focus())
+}
+/* ---------- 落盘 ---------- */
+function finishEdit() {
+  const v = editText.value.trim().toLowerCase()
+  if (/^[0-9a-f]{6}([0-9a-f]{2})?$/.test(v)) {
+    const r = parseInt(v.slice(0, 2), 16)
+    const g = parseInt(v.slice(2, 4), 16)
+    const b = parseInt(v.slice(4, 6), 16)
+    const a = v.length === 8 ? parseInt(v.slice(6, 8), 16) : 255
+    rgba.value = [r, g, b, a]
+    alpha.value = a
+    rgbToHslAndUpdateUi(r, g, b)   // 反算 HSL 并更新滑块/dot
+  } // 非法：什么都不做，自动恢复原值
+  editing.value = false
+}
+/* ---------- RGB → HSL 并驱动 UI ---------- */
+function rgbToHslAndUpdateUi(r: number, g: number, b: number) {
+  /* 1. 反推色相 H */
+  const max = Math.max(r, g, b), min = Math.min(r, g, b)
+  const d = max - min
+  let h = 0
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+    else if (max === g) h = ((b - r) / d + 2) / 6
+    else h = ((r - g) / d + 4) / 6
+  }
+  hue.value = Math.round(h * 360)
+
+  /* 2. 亮度 L → dot.y */
+  const l = (max + min) / 2 / 255
+  dot.y = Math.round((1 - l) * (props.panelHeight - 1))
+
+  /* 3. 饱和度 S → 先画面板，再采样当前 RGB 的“横向位置” */
+  drawPanel() // 保证画布是当前 hue
+  const ctx = canvas.value!.getContext('2d')!
+  let sx = 0
+  for (let x = 0; x < props.panelWidth; x++) {
+    const px = ctx.getImageData(x, dot.y, 1, 1).data
+    if (px[0] === r && px[1] === g && px[2] === b) {
+      sx = x
+      break
+    }
+  }
+  dot.x = sx
+
+  /* 4. 滑块同步 */
+  alphaThumb.value = (alpha.value / 255) * props.panelWidth
+  hueThumb.value = (hue.value / 360) * (hueTrack.value!.clientWidth)
+  sampleColor()
+}
 /* ---------- 画面板：Saturation × Lightness ---------- */
 function drawPanel() {
   const ctx = canvas.value!.getContext('2d')!
@@ -108,6 +175,7 @@ function useDrag(
   let dragging = false
   const down = (e: MouseEvent) => {
     dragging = true
+
     window.addEventListener('mousemove', move)
     window.addEventListener('mouseup', up)
     move(e)
@@ -152,8 +220,11 @@ onMounted(() => {
   useDrag(
     panel.value!,
     (x, y) => {
-      dot.x = Math.max(0, Math.min(props.panelWidth - 1, x))
-      dot.y = Math.max(0, Math.min(props.panelHeight - 1, y))
+      /* 现在 (0,0) 就是画布左上角像素中心，无需 -1 */
+      x = Math.max(0, Math.min(props.panelWidth - 1, Math.round(x)))
+      y = Math.max(0, Math.min(props.panelHeight - 1, Math.round(y)))
+      dot.x = x
+      dot.y = y
       sampleColor()
     }
   )
@@ -181,8 +252,11 @@ watch(hue, () => {
   sampleColor()
 })
 
+
 /* ---------- 初次 ---------- */
 onMounted(() => {
+  //设置上次的值
+
   drawPanel()
   sampleColor()
 })
@@ -233,15 +307,14 @@ canvas {
 
 /* 点 */
 .dot {
-  z-index: 100;
   position: absolute;
   width: 12px;
   height: 12px;
   border-radius: 50%;
   background: white;
   border: 2px solid #0066ff;
-  transform: translate(-50%, -50%);
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 /* Alpha 轨道 */
@@ -275,5 +348,15 @@ canvas {
 .hex {
   margin-top: 6px;
   font-family: monospace;
+}
+
+.hex-display {
+  margin-top: 6px;
+  padding: 2px 4px;
+  border: 1px solid #aaa;
+  border-radius: 2px;
+  font-family: monospace;
+  cursor: pointer;
+  user-select: none;
 }
 </style>

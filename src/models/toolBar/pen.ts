@@ -2,7 +2,8 @@ import { newStroke, newPoint, toRelativePoints } from '@/utils'
 import type { Point, Board, strokeFlow, Stroke } from '../types'
 let lastPoint: Point = newPoint()
 let keyPoints: Stroke
-
+import toolBarData from '@/stores/toolBarStores'
+let toolBarStores = toolBarData()
 export function pen_Down(
   ctx: CanvasRenderingContext2D,
   userQueue: strokeFlow,
@@ -17,8 +18,8 @@ export function pen_Down(
   keyPoints.head = lastPoint
   keyPoints.points.push({ x: 0, y: 0, t: lastPoint.t, p: lastPoint.p })
   //设置样式
-  ctx.strokeStyle = '#000000'
-  ctx.lineWidth = 5
+  keyPoints.color = toolBarStores.getNowColor()
+  keyPoints.width = 5
   userQueue.pushStroke(keyPoints)
 }
 
