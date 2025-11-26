@@ -40,9 +40,25 @@ export interface Board {
   getPanx: () => number
   getPany: () => number
   initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
+  // 新增橡皮擦相关函数（全部加上！）
+  /** 开始橡皮擦模式（鼠标按下） */
+  startErasing: () => void
+
+  /** 收集橡皮擦路径上的笔画（鼠标移动时频繁调用） */
+  collectErasingStrokes: (screenPoints: Point[], eraserRadius?: number) => void
+
+  /** 确认删除（鼠标松开），返回被删除的笔画用于 undo */
+  confirmErase: () => Stroke[]
+
+  /** 渲染时判断某笔画是否正在被擦除（用于变透明效果） */
+  isStrokeBeingErased: (stroke: Stroke) => boolean
+
+  /** （可选）获取最近一次橡皮擦删除的笔画，用于精细 undo */
+  getLastErasedStrokes: () => Stroke[]
+  // 橡皮渲染
 }
 //工具类型
-export type toolMode = 'hand' | 'pen'
+export type toolMode = 'hand' | 'pen' | 'eraser'
 export interface myTool {
   toolName: toolMode
   penSize: number

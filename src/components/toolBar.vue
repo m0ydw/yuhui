@@ -3,6 +3,7 @@
     <hand></hand>
     <pen></pen>
     <div class="move" ref="move"></div>
+    <ereaser></ereaser>
   </div>
 </template>
 
@@ -11,6 +12,7 @@ import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { toolBarPointer } from '@/models';
 import hand from './toolBar/hand.vue'
 import pen from './toolBar/pen.vue';
+import ereaser from './toolBar/ereaser.vue';
 const position = ref({ x: 0, y: 0 })
 const move = ref<HTMLDivElement | null>(null)
 const main = ref<HTMLDivElement | null>(null)

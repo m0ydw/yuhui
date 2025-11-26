@@ -1,13 +1,17 @@
+<!-- 多人路由https://localhost:5173/draw?roomId=mig0m6qpd04b26-6e2a1915d12f6c1e -->
+
 <template>
   <div>
     <canvas width="600" height="600" id="drawboard"></canvas>
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData"></scale>
+    <button @click="save(boardData)"></button>
   </div>
 </template>
 
 <script setup lang="ts">
+
 import scale from './toolBar/scale.vue'
-import { ref, shallowRef, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, type Ref } from 'vue'
 import {
   canvasPointer,//捕获指针至canvas
   type Board, type Stroke,
@@ -116,6 +120,7 @@ onMounted(async () => {
     History = null
   } else {
 
+
   }
 })
 
@@ -124,7 +129,21 @@ onUnmounted(() => {
   cleanup?.()
 })
 
-
+//调试
+function save(boardData: Board | undefined) {
+  if (boardData) {
+    localStorage.setItem('board', JSON.stringify(boardData))
+  }
+}
+function get() {
+  return localStorage.getItem('board')
+}
 </script>
 
-<style scoped></style>
+<style scoped>
+button {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+</style>

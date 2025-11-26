@@ -3,6 +3,7 @@ import toolBarData from '@/stores/toolBarStores'
 
 import { pen_Down, pen_Move, pen_Up } from './toolBar/pen'
 import { hand_Down, hand_Move, hand_Up } from './toolBar/hand'
+import { eraser_Down, eraser_Move, eraser_Up } from './toolBar/eraser'
 export function canvasPointer(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
@@ -26,6 +27,9 @@ export function canvasPointer(
       case 'pen':
         pen_Down(ctx, userQueue, board, x, y)
         break
+      case 'eraser': // 新增！
+        eraser_Down(board, ctx, canvas, offsetX, offsetY)
+        break
     }
   }
   const mouseMove = (e: PointerEvent) => {
@@ -42,6 +46,9 @@ export function canvasPointer(
       case 'pen':
         pen_Move(userQueue, x, y)
         break
+      case 'eraser': // 新增！
+        eraser_Move(board, ctx, canvas, offsetX, offsetY)
+        break
     }
   }
 
@@ -54,6 +61,9 @@ export function canvasPointer(
         break
       case 'pen':
         pen_Up(userQueue, board)
+        break
+      case 'eraser': // 新增！
+        eraser_Up(board, ctx, canvas)
         break
     }
     canvas.releasePointerCapture(e.pointerId)
