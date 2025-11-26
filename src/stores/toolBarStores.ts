@@ -22,8 +22,7 @@ const toolBarData = defineStore('toolBar', () => {
   const nowColor = ref('#000000')
   //改变color
   function changeNowColor(aim: string) {
-    console.log(aim)
-    nowColor.value = `#${aim}`
+    nowColor.value = `${aim}`
   }
   function getNowColor() {
     return nowColor.value

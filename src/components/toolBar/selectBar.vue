@@ -1,12 +1,14 @@
 <template>
   <div class="selectBar" ref="box" v-if="toolBarStore.isNeedDisplay()">
-    <colorSelect></colorSelect>
+    <penSelect></penSelect>
   </div>
 </template>
 
 <script setup lang="ts">
+// 组件
+import penSelect from './penSelect/penSelect.vue';
+// 自身逻辑
 import toolBarData from '@/stores/toolBarStores';
-import colorSelect from './penSelect/colorSelect.vue';
 let toolBarStore = toolBarData()
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 const box = ref<HTMLElement | null>(null);
