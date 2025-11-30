@@ -1,4 +1,4 @@
-import type { Board, strokeFlow, toolMode } from './types'
+import type { Board, strokeFlow } from './types'
 import toolBarData from '@/stores/toolBarStores'
 
 import { pen_Down, pen_Move, pen_Up } from './toolBar/pen'
@@ -63,7 +63,15 @@ export function canvasPointer(
         pen_Up(userQueue, board)
         break
       case 'eraser': // 新增！
-        eraser_Up(board, ctx, canvas)
+        const removed = eraser_Up(board, ctx, canvas)
+        if (removed?.length) {
+          const ids = removed
+            .map((stroke) => stroke.id)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0)
+          if (ids.length) {
+            userQueue.handleLocalErase(ids, removed)
+          }
+        }
         break
     }
     canvas.releasePointerCapture(e.pointerId)

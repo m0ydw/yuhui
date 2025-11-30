@@ -6,6 +6,7 @@ export class WebSocketClient {
   // 核心改进：增加两个内部管理器
   private pendingPromises = new Map<string, { resolve: Function; reject: Function }>()
   private specialHandlers = new Map<string, (data: any) => boolean>() // 返回 true 则不再分发
+  private isConnecting = false //正在连接？
 
   // 原有监听器保持不变
   private listeners: Map<string, Set<(data: any) => void>> = new Map()
@@ -46,6 +47,10 @@ export class WebSocketClient {
       const userId = this.userId || 'unknown' // 明确为 string 类型
       return Promise.resolve(userId)
     }
+    // 正在连接：直接 return
+    if (this.isConnecting) {
+      return Promise.reject(new Error('正在连接中，请稍候'))
+    }
 
     // 使用新机制等待 user-assigned
     const userAssignedPromise = this.waitForMessage('user-assigned').then((data) => {
@@ -57,7 +62,6 @@ export class WebSocketClient {
     this.ws.onopen = () => console.log('WebSocket 已连接')
     this.ws.onclose = () => console.log('WebSocket 已断开')
     this.ws.onerror = (error) => console.error('WebSocket 错误:', error)
-
     this.ws.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data)
       console.log('收到响应:', data)

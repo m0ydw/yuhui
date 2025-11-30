@@ -15,6 +15,7 @@ export function eraser_Down(
 
   // 开始橡皮擦模式
   board.startErasing()
+  board.collectErasingStrokes(currentPath)
 
   // 立即触发一次渲染（防止延迟）
   board.render(ctx, canvas)

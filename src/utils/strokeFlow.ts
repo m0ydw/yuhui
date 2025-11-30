@@ -13,31 +13,56 @@ import {
   type Board,
 } from '@/models/types'
 import { distanceTwoPoints } from './pointUtils'
-import { sendNewStroke, sendStrokePoints, sendStrokeFinish, sendHistoryToserver } from '@/models'
+import {
+  sendStartStroke,
+  sendStrokePoints,
+  sendStrokeFinish,
+  sendEraseStrokes,
+  sendUndoRequest,
+  sendRedoRequest,
+} from '@/models'
 function newUserFlow(): allFlowItem {
   return {
     strokes: new StrokeQueue(),
   }
 }
 import { myWebsocketClient } from '@/models/webSocket/cilentExample'
+
+function generateTempStrokeId(): string {
+  const randomPart =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+  return `temp_${randomPart}`
+}
 //点的组队发送，节流
 function sendThrottler() {
   let willSend: Point[] = []
   let lastPoint: Point | null = null
   let lastTime = 0
+  let currentStrokeId: string | null = null
 
-  function send(id: string) {
-    myWebsocketClient.send(sendStrokePoints(willSend, id))
+  function send(userId: string) {
+    if (!currentStrokeId || willSend.length === 0) {
+      return
+    }
+    myWebsocketClient.send(sendStrokePoints(willSend, currentStrokeId, userId))
     willSend = []
     lastTime = Date.now()
   }
 
   return {
     //确保第一次不会直接发送
-    newStroke() {
+    newStroke(strokeId: string) {
+      currentStrokeId = strokeId
       lastTime = Date.now()
+      willSend = []
+      lastPoint = null
     },
     addPoint(pt: Point, id: string) {
+      if (!currentStrokeId) {
+        return
+      }
       willSend.push(pt)
       const now = Date.now()
       const lastToNow = now - lastTime
@@ -57,10 +82,14 @@ function sendThrottler() {
       lastPoint = pt
     },
     oneFinish(id: string) {
+      if (!currentStrokeId) {
+        return
+      }
       //绘画结束(置空)发送
       send(id)
       willSend = []
       lastPoint = null
+      currentStrokeId = null
     },
   }
 }
@@ -71,151 +100,358 @@ export function newStrokeFlow(
   bd: Board,
 ): strokeFlow {
   const ctx = ct
+  const canvasEl = ctx.canvas as HTMLCanvasElement
   const myId = id
-  //默认是一个
   const allFlow = new Map<string, allFlowItem>([[myId, newUserFlow()]])
+  const userActiveStroke = new Map<string, string>()
+  const idAlias = new Map<string, string>()
   let isRender: boolean = false
+  const isOffline = myId === '0'
+
+  type LocalOperation = { type: 'draw' | 'erase'; strokes: Stroke[] }
+  const LOCAL_HISTORY_LIMIT = 50
+  const localUndoStack: LocalOperation[] = []
+  const localRedoStack: LocalOperation[] = []
+
+  function ensureUserFlow(userId: string): allFlowItem {
+    if (!allFlow.has(userId)) {
+      allFlow.set(userId, newUserFlow())
+    }
+    return allFlow.get(userId)!
+  }
+
   function startRender() {
     if (!isRender) {
       requestAnimationFrame(render)
       isRender = true
     }
   }
+
+  function resolveStrokeId(strokeId: string): string {
+    let current = strokeId
+    const guard = new Set<string>()
+    while (current && idAlias.has(current) && !guard.has(current)) {
+      guard.add(current)
+      current = idAlias.get(current) as string
+    }
+    return current
+  }
+
+  function ensureStrokeIdentity(stroke: Stroke, owner: string) {
+    if (!stroke.id) {
+      stroke.id = generateTempStrokeId()
+    }
+    stroke.ownerId = stroke.ownerId || owner
+    if (typeof stroke.version !== 'number') {
+      stroke.version = 0
+    }
+  }
+
+  function clonePoint(pt: Point): Point {
+    return { x: pt.x, y: pt.y, t: pt.t, p: pt.p }
+  }
+
+  function cloneStrokeData(stroke: Stroke): Stroke {
+    return {
+      head: clonePoint(stroke.head),
+      id: stroke.id,
+      points: stroke.points.map((p) => clonePoint(p)),
+      color: stroke.color,
+      tool: stroke.tool,
+      now: stroke.now,
+      width: stroke.width,
+      finish: stroke.finish,
+      ownerId: stroke.ownerId,
+      version: stroke.version,
+    }
+  }
+
+  function pushLocalOperation(op: LocalOperation) {
+    if (!isOffline) return
+    localUndoStack.push({
+      type: op.type,
+      strokes: op.strokes.map((stroke) => cloneStrokeData(stroke)),
+    })
+    if (localUndoStack.length > LOCAL_HISTORY_LIMIT) {
+      localUndoStack.shift()
+    }
+    localRedoStack.length = 0
+  }
+
+  function recordLocalDraw(stroke: Stroke) {
+    if (!isOffline) return
+    pushLocalOperation({ type: 'draw', strokes: [stroke] })
+  }
+
+  function recordLocalErase(strokes: Stroke[]) {
+    if (!isOffline || !strokes.length) return
+    pushLocalOperation({ type: 'erase', strokes })
+  }
+
+  function performLocalUndo(): boolean {
+    if (!isOffline) return false
+    const op = localUndoStack.pop()
+    if (!op) {
+      return false
+    }
+    if (op.type === 'draw') {
+      const ids = op.strokes.map((stroke) => resolveStrokeId(stroke.id)).filter(Boolean)
+      if (ids.length) {
+        bd.removeStrokesById(ids)
+        bd.render(ctx, canvasEl)
+      }
+    } else {
+      bd.addStrokes(op.strokes.map((stroke) => cloneStrokeData(stroke)))
+      bd.render(ctx, canvasEl)
+    }
+    localRedoStack.push(op)
+    if (localRedoStack.length > LOCAL_HISTORY_LIMIT) {
+      localRedoStack.shift()
+    }
+    return true
+  }
+
+  function performLocalRedo(): boolean {
+    if (!isOffline) return false
+    const op = localRedoStack.pop()
+    if (!op) {
+      return false
+    }
+    if (op.type === 'draw') {
+      bd.addStrokes(op.strokes.map((stroke) => cloneStrokeData(stroke)))
+      bd.render(ctx, canvasEl)
+    } else {
+      const ids = op.strokes.map((stroke) => resolveStrokeId(stroke.id)).filter(Boolean)
+      if (ids.length) {
+        bd.removeStrokesById(ids)
+        bd.render(ctx, canvasEl)
+      }
+    }
+    localUndoStack.push(op)
+    if (localUndoStack.length > LOCAL_HISTORY_LIMIT) {
+      localUndoStack.shift()
+    }
+    return true
+  }
+
   function render() {
     let once = false
-    //有一次渲染就不停
-    for (const [key, value] of allFlow) {
+    for (const [, value] of allFlow) {
       if (value.strokes.queueShouleRender()) {
         once = true
-        //没渲染完成 每次只执行一部分   不全部完成
-        //得到首个队列元素
         const nowRender = value.strokes.getHead()
         if (!nowRender) {
           continue
         }
-        //第一个笔画若已经完成
         if (nowRender.finish && nowRender.now === nowRender.points.length - 1) {
-          //去除第一个笔画同时加入board中
           const willAdd = value.strokes.finishRender()
-          console.log(willAdd)
           bd.addStroke(willAdd)
-          //之后如果为空就clear（防止number溢出）
-          if (value.strokes.isEmpty()) {
-            // value.strokes.clear()
-          }
         } else {
           ctx.save()
           ctx.translate(bd.getPanx(), bd.getPany())
           ctx.scale(bd.getZoom(), bd.getZoom())
-          //否则渲染
-          //先移动到上个点的位置
           ctx.beginPath()
           const last = nowRender.points[nowRender.now]
           if (last) {
             ctx.moveTo(nowRender.head.x + last.x, nowRender.head.y + last.y)
           }
-          //准备样式
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
           ctx.lineWidth = nowRender.width
           ctx.strokeStyle = nowRender.color
-
-          //绘图开始
           for (let i = nowRender.now + 1; i < nowRender.points.length; i++) {
             let x = (nowRender.points[i] as Point).x + nowRender.head.x
             let y = (nowRender.points[i] as Point).y + nowRender.head.y
             ctx.lineTo(x, y)
           }
           ctx.stroke()
-          //更新已渲染的部分标记
           nowRender.now = nowRender.points.length - 1
           ctx.restore()
         }
-      } else {
-        //渲染完成
-        continue
       }
     }
     if (once) {
-      //有一次渲染就继续
       requestAnimationFrame(render)
     } else {
-      // 否则结束
       isRender = false
     }
   }
+
+  function broadcastStrokeStart(stroke: Stroke) {
+    if (myId === '0') return
+    myThrotter.newStroke(stroke.id)
+    myWebsocketClient.send(sendStartStroke(myId, stroke.id, stroke))
+  }
+
+  function broadcastFinish(stroke: Stroke) {
+    if (myId === '0') return
+    myThrotter.oneFinish(myId)
+    const resolvedId = resolveStrokeId(stroke.id)
+    stroke.id = resolvedId
+    myWebsocketClient.send(sendStrokeFinish(myId, resolvedId, stroke))
+  }
+
+  function markActive(userId: string, strokeId: string) {
+    userActiveStroke.set(userId, strokeId)
+  }
+
+  function clearActive(userId: string, strokeId?: string) {
+    if (!strokeId) {
+      userActiveStroke.delete(userId)
+      return
+    }
+    const resolved = resolveStrokeId(strokeId)
+    const active = userActiveStroke.get(userId)
+    if (active === strokeId || active === resolved) {
+      userActiveStroke.delete(userId)
+    }
+  }
+
   return {
     pushPoint(pt: Point, id: string = myId) {
-      //不传id时获取自己的队列
-      const myQueue = allFlow.get(id)
-      if (myQueue) {
-        myQueue.strokes.appendPointToTail(pt)
-      }
-      //开始渲染
+      const myQueue = ensureUserFlow(id)
+      myQueue.strokes.appendPointToTail(pt)
       startRender()
-      //多人时加入点
       if (id !== '0' && id === myId) {
         myThrotter.addPoint(pt, id)
       }
     },
-    pushStroke(stroke: Stroke, id: string = myId) {
-      const myQueue = allFlow.get(id)
-      if (myQueue) {
-        myQueue.strokes.enqueueNewStroke(stroke)
-      }
-      //开始渲染
+    pushStroke(stroke: Stroke, userId: string = myId) {
+      ensureStrokeIdentity(stroke, userId)
+      stroke.finish = Boolean(stroke.finish)
+      const myQueue = ensureUserFlow(userId)
+      myQueue.strokes.enqueueNewStroke(stroke)
+      markActive(userId, stroke.id)
       startRender()
-      //发送
-      if (id !== '0' && id === myId) {
-        myThrotter.newStroke()
-        myWebsocketClient.send(sendNewStroke(myId, stroke))
+      if (userId !== '0' && userId === myId) {
+        broadcastStrokeStart(stroke)
       }
     },
-    //自己的finish
-    setFinish(id: string = myId) {
-      const myQueue = allFlow.get(id)
+    setFinish(userId: string = myId, strokeId?: string, finishedStroke?: Stroke) {
+      const myQueue = allFlow.get(userId)
       if (myQueue) {
-        //守卫
-        const last = myQueue.strokes.getTeil()
+        const targetId = strokeId ? resolveStrokeId(strokeId) : undefined
+        let last = targetId ? myQueue.strokes.getStrokeById(targetId) : undefined
+        if (!last) {
+          last = myQueue.strokes.getTeil()
+        }
         if (last) {
-          //守卫
           last.finish = true
-          if (id !== '0' && id === myId) {
-            //多人条件判断
-            // 发送并置空
-            myThrotter.oneFinish(id)
-            // 发送完成的消息
-            myWebsocketClient.send(sendStrokeFinish(id))
-            //发送历史记录
-            myWebsocketClient.send(sendHistoryToserver(last))
+          if (finishedStroke && userId !== myId) {
+            Object.assign(last, finishedStroke)
+          }
+          if (userId !== '0' && userId === myId) {
+            broadcastFinish(last)
+          }
+          if (isOffline && userId === myId) {
+            recordLocalDraw(cloneStrokeData(last))
           }
         }
       }
+      clearActive(userId, strokeId)
     },
-    //新建用户
-    newUser(id: string) {
-      allFlow.set(id, newUserFlow())
+    newUser(userId: string) {
+      ensureUserFlow(userId)
     },
-    //删除用户
-    delUser(id: string) {
-      allFlow.delete(id)
+    delUser(userId: string) {
+      allFlow.delete(userId)
+      userActiveStroke.delete(userId)
     },
-    pushOtherPoints(pts: Point[], id: string) {
-      const Queue = allFlow.get(id)
-      if (Queue) {
-        Queue.strokes.appendPoints(pts)
+    pushOtherPoints(pts: Point[], userId: string, strokeId?: string) {
+      const resolvedId = strokeId ? resolveStrokeId(strokeId) : undefined
+      if (resolvedId) {
+        markActive(userId, resolvedId)
       }
+      const queue = ensureUserFlow(userId)
+      queue.strokes.appendPointsToStroke(resolvedId, pts)
+      startRender()
     },
     newOthers(others: string[]) {
-      others.forEach((value, index) => {
-        if (!allFlow.has(value)) {
-          //没有就新建
-          allFlow.set(value, newUserFlow())
-        }
+      others.forEach((value) => {
+        ensureUserFlow(value)
       })
     },
     getBoard() {
       return bd
+    },
+    replaceStrokeId(tempId: string, realId: string) {
+      if (!tempId || !realId || tempId === realId) {
+        return
+      }
+      const resolved = resolveStrokeId(tempId)
+      idAlias.set(resolved, realId)
+      bd.replaceStrokeId(resolved, realId)
+      allFlow.forEach((value) => {
+        value.strokes.replaceStrokeId(resolved, realId)
+      })
+      for (const [user, stroke] of userActiveStroke.entries()) {
+        if (stroke === tempId || stroke === resolved) {
+          userActiveStroke.set(user, realId)
+        }
+      }
+    },
+    handleRemoteRemoval(ids: string[]) {
+      if (!ids.length) {
+        return
+      }
+      const resolved = Array.from(new Set(ids.map((id) => resolveStrokeId(id)).filter(Boolean)))
+      if (!resolved.length) {
+        return
+      }
+      bd.removeStrokesById(resolved)
+      resolved.forEach((id) => {
+        for (const [user, active] of userActiveStroke.entries()) {
+          const activeResolved = resolveStrokeId(active)
+          if (active === id || activeResolved === id) {
+            userActiveStroke.delete(user)
+          }
+        }
+      })
+      bd.render(ctx, canvasEl)
+    },
+    handleLocalErase(ids: string[], removedStrokes: Stroke[] = []) {
+      if (!ids.length) {
+        return
+      }
+      const resolved = Array.from(new Set(ids.map((id) => resolveStrokeId(id)).filter(Boolean)))
+      if (!resolved.length) {
+        return
+      }
+      if (isOffline) {
+        if (removedStrokes.length) {
+          recordLocalErase(removedStrokes.map((stroke) => cloneStrokeData(stroke)))
+        }
+        return
+      }
+      if (myId === '0') {
+        return
+      }
+      myWebsocketClient.send(sendEraseStrokes(myId, resolved))
+    },
+    requestUndo() {
+      if (performLocalUndo()) {
+        return
+      }
+      if (myId === '0') {
+        return
+      }
+      myWebsocketClient.send(sendUndoRequest(myId))
+    },
+    requestRedo() {
+      if (performLocalRedo()) {
+        return
+      }
+      if (myId === '0') {
+        return
+      }
+      myWebsocketClient.send(sendRedoRequest(myId))
+    },
+    handleRestoreStrokes(strokes: Stroke[]) {
+      if (!strokes?.length) {
+        return
+      }
+      bd.addStrokes(strokes.map((stroke) => ({ ...stroke })))
+      bd.render(ctx, canvasEl)
     },
   }
 }

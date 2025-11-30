@@ -8,20 +8,51 @@ export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<type
     const aim = data.data
     Flow.newUser(aim.user)
   }),
-    //新笔画
-    client.on('newStroke', (data) => {
+    client.on('startStroke', (data) => {
       const aim = data.data
-      Flow.pushStroke(aim.willPush, aim.user)
+      const stroke = aim.stroke
+      if (!stroke) {
+        return
+      }
+      if (!stroke.id && aim.tempId) {
+        stroke.id = aim.tempId
+      }
+      stroke.ownerId = aim.user
+      Flow.pushStroke(stroke, aim.user)
     }),
-    //新点
-    client.on('comePoints', (data) => {
+    client.on('confirmStroke', (data) => {
       const aim = data.data
-      Flow.pushOtherPoints(aim.points, aim.user)
+      Flow.replaceStrokeId(aim.tempId, aim.strokeId)
+      if (typeof aim.version === 'number') {
+        const board = Flow.getBoard()
+        const stroke = board.getStrokeById(aim.strokeId)
+        if (stroke) {
+          stroke.version = aim.version
+        }
+      }
     }),
-    //完成
+    client.on('strokePoints', (data) => {
+      const aim = data.data
+      Flow.pushOtherPoints(aim.points, aim.user, aim.strokeId)
+    }),
     client.on('finishStroke', (data) => {
       const aim = data.data
-      Flow.setFinish(aim.user)
+      if (aim.stroke) {
+        aim.stroke.ownerId = aim.user
+      }
+      Flow.setFinish(aim.user, aim.strokeId, aim.stroke)
+    }),
+    client.on('eraseStrokes', (data) => {
+      const aim = data.data
+      Flow.handleRemoteRemoval(aim.strokeIds || [])
+    }),
+    client.on('undoResult', (data) => {
+      const aim = data.data
+      Flow.handleRemoteRemoval(aim.strokeIds || [])
+    }),
+    client.on('restoreStrokes', (data) => {
+      const aim = data.data
+      Flow.handleRestoreStrokes(aim.strokes || [])
     }),
     client.on('whoExit', (data) => {
       const aim = data.data

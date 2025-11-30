@@ -1,6 +1,6 @@
 import type { Point, Stroke, Board } from '@/models/types'
 import type { Ref } from 'vue'
-
+import { pointToSegmentDistance2 } from './pointUtils'
 function distance2(a: { x: number; y: number }, b: { x: number; y: number }) {
   const dx = a.x - b.x
   const dy = a.y - b.y
@@ -12,6 +12,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   const GRID_SIZE = gridSize
   //全局数组维护渲染顺序
   const orderedStrokes: Stroke[] = []
+  const strokeIndex: Map<string, Stroke> = new Map()
   //空间哈希表
   const gridMap: Map<string, Stroke[]> = new Map()
   //视窗大小
@@ -42,6 +43,15 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   //向表格中添加笔画(第一层(seen)set去重)
   function _addStroke(st: Stroke): void {
     const stroke = structuredClone(st)
+    if (!stroke.id) {
+      stroke.id = `s_${crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`
+    }
+    if (strokeIndex.has(stroke.id)) {
+      const duplicated = strokeIndex.get(stroke.id)
+      if (duplicated) {
+        _removeStrokeFromGrid(duplicated)
+      }
+    }
     const seen = new Set<string>()
     //对head处理
     const headKey = key(stroke.head.x, stroke.head.y)
@@ -68,6 +78,10 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     })
     //插入全局 数组
     orderedStrokes.push(stroke)
+    strokeIndex.set(stroke.id, stroke)
+  }
+  function _addStrokes(strokes: Stroke[]): void {
+    strokes.forEach((stroke) => _addStroke(stroke))
   }
   //根据视窗收集可见 stroke
   function _strokesInView(): Stroke[] {
@@ -175,6 +189,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   // 在 newBoard 内部加一个 Set
   const erasingStrokes = new Set<Stroke>() // 正在被擦除（变透明）的笔画
   let lastErasedStrokes: Stroke[] = [] // 松开后真正删除的（用于 undo）
+  let eraserPathProcessed = 0
+  let lastEraserPoint: { x: number; y: number } | null = null
   function _removeStrokeFromGrid(stroke: Stroke) {
     const seen = new Set<string>()
     const headKey = key(stroke.head.x, stroke.head.y)
@@ -199,6 +215,31 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         }
       }
     })
+    const idx = orderedStrokes.indexOf(stroke)
+    if (idx > -1) {
+      orderedStrokes.splice(idx, 1)
+    }
+    strokeIndex.delete(stroke.id)
+  }
+  function _removeStrokeById(id: string): Stroke | undefined {
+    const aim = strokeIndex.get(id)
+    if (!aim) {
+      return undefined
+    }
+    _removeStrokeFromGrid(aim)
+    return aim
+  }
+  function _replaceStrokeId(oldId: string, newId: string) {
+    if (!oldId || !newId || oldId === newId) {
+      return
+    }
+    const aim = strokeIndex.get(oldId)
+    if (!aim) {
+      return
+    }
+    aim.id = newId
+    strokeIndex.delete(oldId)
+    strokeIndex.set(newId, aim)
   }
   return {
     //画布坐标转化为世界坐标
@@ -218,6 +259,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     worldToScreen: (wx: number, wy: number): Point => _worldToScreen(wx, wy),
     //向表格中添加笔画
     addStroke: (stroke: Stroke): void => _addStroke(stroke),
+    addStrokes: (strokes: Stroke[]): void => _addStrokes(strokes),
     //渲染
     render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void =>
       rafRender(ctx, canvas),
@@ -265,13 +307,27 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       })
       _render(ctx, canvas)
     },
+    replaceStrokeId: (oldId: string, newId: string) => _replaceStrokeId(oldId, newId),
+    removeStrokesById: (ids: string[]): Stroke[] => {
+      const removed: Stroke[] = []
+      ids.forEach((id) => {
+        const stroke = _removeStrokeById(id)
+        if (stroke) {
+          removed.push(stroke)
+        }
+      })
+      return removed
+    },
+    getStrokeById: (id: string): Stroke | undefined => strokeIndex.get(id),
     // 1. 开始橡皮擦（鼠标按下）
     startErasing: () => {
       erasingStrokes.clear()
+      eraserPathProcessed = 0
+      lastEraserPoint = null
     },
 
     // 2. 收集橡皮路径上的笔画（鼠标移动时频繁调用）
-    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 3) => {
+    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 12) => {
       if (screenPoints.length === 0) return
 
       const worldPoints = screenPoints.map((p) => ({
@@ -279,50 +335,83 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         y: (p.y - panY) / zoom,
       }))
 
-      const last = worldPoints[worldPoints.length - 1]!
-      if (!last) return
-
-      // 9宫格获取候选笔画
-      const candidateKeys = new Set<string>()
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dy = -1; dy <= 1; dy++) {
-          candidateKeys.add(key(last.x + dx * GRID_SIZE, last.y + dy * GRID_SIZE))
-        }
-      }
-
-      const candidates = new Set<Stroke>()
-      candidateKeys.forEach((k) => {
-        const list = gridMap.get(k)
-        if (list) list.forEach((s) => candidates.add(s))
-      })
-
-      // 使用传入的 eraserRadius（默认 20）
-      for (const stroke of candidates) {
-        if (erasingStrokes.has(stroke)) continue
-
-        const hitRadius = stroke.width / 2 + eraserRadius
-        const hitRadius2 = hitRadius * hitRadius
-
-        // head 特殊处理（更宽容）
-        const headDist2 = (stroke.head.x - last.x) ** 2 + (stroke.head.y - last.y) ** 2
-        if (headDist2 < hitRadius2 * 2.25) {
-          erasingStrokes.add(stroke)
-          continue
+      const processPoint = (point: { x: number; y: number }) => {
+        const candidateKeys = new Set<string>()
+        const span = Math.max(1, Math.ceil((eraserRadius * 2) / GRID_SIZE))
+        for (let dx = -span; dx <= span; dx++) {
+          for (let dy = -span; dy <= span; dy++) {
+            candidateKeys.add(key(point.x + dx * GRID_SIZE, point.y + dy * GRID_SIZE))
+          }
         }
 
-        // 普通点判断
-        const hit = stroke.points.some((p) => {
-          const wx = p.x + stroke.head.x
-          const wy = p.y + stroke.head.y
-          const dx = wx - last.x
-          const dy = wy - last.y
-          return dx * dx + dy * dy < hitRadius2
+        const candidates = new Set<Stroke>()
+        candidateKeys.forEach((k) => {
+          const list = gridMap.get(k)
+          if (list) list.forEach((s) => candidates.add(s))
         })
 
-        if (hit) {
-          erasingStrokes.add(stroke)
+        for (const stroke of candidates) {
+          if (erasingStrokes.has(stroke)) continue
+
+          const hitRadius = stroke.width / 2 + eraserRadius
+          const hitRadius2 = hitRadius * hitRadius
+
+          const headDist2 = (stroke.head.x - point.x) ** 2 + (stroke.head.y - point.y) ** 2
+          if (headDist2 < hitRadius2 * 2.25) {
+            erasingStrokes.add(stroke)
+            continue
+          }
+
+          let hit = false
+          const pts = stroke.points
+          const hx = stroke.head.x
+          const hy = stroke.head.y
+
+          for (let i = 0; i < pts.length - 1; i++) {
+            const p1 = pts[i]
+            const p2 = pts[i + 1]
+
+            const x1 = p1!.x + hx
+            const y1 = p1!.y + hy
+            const x2 = p2!.x + hx
+            const y2 = p2!.y + hy
+
+            const d2 = pointToSegmentDistance2(point.x, point.y, x1, y1, x2, y2)
+
+            if (d2 <= hitRadius2) {
+              hit = true
+              break
+            }
+          }
+
+          if (hit) {
+            erasingStrokes.add(stroke)
+          }
         }
       }
+
+      for (let i = eraserPathProcessed; i < worldPoints.length; i++) {
+        const current = worldPoints[i]
+        if (!current) continue
+        if (lastEraserPoint) {
+          const dx = current.x - lastEraserPoint.x
+          const dy = current.y - lastEraserPoint.y
+          const distance = Math.hypot(dx, dy)
+          const step = Math.max(1, eraserRadius * 0.5)
+          const steps = Math.max(1, Math.floor(distance / step))
+          for (let s = 1; s <= steps; s++) {
+            const ratio = s / steps
+            processPoint({
+              x: lastEraserPoint.x + dx * ratio,
+              y: lastEraserPoint.y + dy * ratio,
+            })
+          }
+        }
+        processPoint(current)
+        lastEraserPoint = current
+      }
+
+      eraserPathProcessed = worldPoints.length
     },
     // 3. 确认擦除（鼠标松开）
     confirmErase: (): Stroke[] => {
@@ -333,6 +422,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       })
       lastErasedStrokes = deleted
       erasingStrokes.clear()
+      eraserPathProcessed = 0
+      lastEraserPoint = null
       return deleted // 返回被删除的笔画，用于 undo
     },
 

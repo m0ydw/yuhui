@@ -29,6 +29,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   myWebsocketClient//websocket实例
 } from '@/models/webSocket/cilentExample'
+import useClientStore from '@/stores/clientStores'
 const router = useRouter()
 const route = useRoute()
 let hasPlayer = false
@@ -49,13 +50,14 @@ let boardData: Board | undefined = undefined
 let boardReady = ref(false)
 //清理函数
 let cleanup: (() => void) | null = null
+const clientStore = useClientStore()
 //初始化
 onMounted(async () => {
   //确定模式
   await router.isReady()
   const roomId = route.query.roomId
   if (roomId) {
-    //多人
+    //先进入多人
     userId = await myWebsocketClient.connect()
     //尝试加入对应room
     myWebsocketClient.send(sendIAmJoin(roomId.toString(), userId))
@@ -91,6 +93,7 @@ onMounted(async () => {
     boardReady.value = true
     //创建用户队列
     userQueue = newStrokeFlow(userId, ctx.value, boardData)
+    clientStore.setFlow(userQueue)
     //注册监听
     cleanup = canvasPointer(canvas.value, ctx.value, boardData, userQueue)
     // 初次渲染
@@ -127,6 +130,7 @@ onMounted(async () => {
 //结束时
 onUnmounted(() => {
   cleanup?.()
+  clientStore.setFlow(null)
 })
 
 //调试

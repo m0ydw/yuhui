@@ -16,6 +16,8 @@ export interface Stroke {
   now: number
   width: number
   finish: boolean
+  version?: number
+  ownerId?: string
 }
 //数据表格
 export type gridMap = Map<string, Stroke[]>
@@ -24,6 +26,7 @@ export interface Board {
   screenToWorldStroke: (st: Stroke) => Stroke
   worldToScreen: (wx: number, wy: number) => Point
   addStroke: (stroke: Stroke) => void
+  addStrokes: (strokes: Stroke[]) => void
   render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setZoom: (
@@ -40,6 +43,9 @@ export interface Board {
   getPanx: () => number
   getPany: () => number
   initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
+  replaceStrokeId: (oldId: string, newId: string) => void
+  removeStrokesById: (ids: string[]) => Stroke[]
+  getStrokeById: (id: string) => Stroke | undefined
   // 新增橡皮擦相关函数（全部加上！）
   /** 开始橡皮擦模式（鼠标按下） */
   startErasing: () => void
@@ -126,6 +132,40 @@ export class StrokeQueue {
     }
     tailStroke.points.push(...pts)
   }
+
+  getStrokeById(id: string): Stroke | undefined {
+    for (const [, stroke] of this.items) {
+      if (stroke.id === id) {
+        return stroke
+      }
+    }
+    return undefined
+  }
+
+  appendPointsToStroke(strokeId: string | undefined, pts: Point[]): void {
+    if (!pts.length) {
+      return
+    }
+    if (!strokeId) {
+      this.appendPoints(pts)
+      return
+    }
+    const target = this.getStrokeById(strokeId) || this.getTeil()
+    if (!target) {
+      throw new Error('未找到目标笔画，无法追加点')
+    }
+    target.points.push(...pts)
+  }
+
+  replaceStrokeId(oldId: string, newId: string): void {
+    if (!oldId || !newId || oldId === newId) {
+      return
+    }
+    const target = this.getStrokeById(oldId)
+    if (target) {
+      target.id = newId
+    }
+  }
   finishRender(): Stroke {
     //移除首元素
     if (this.isEmpty()) {
@@ -161,10 +201,16 @@ export interface allFlowItem {
 export interface strokeFlow {
   pushPoint: (pt: Point, id?: string) => void
   pushStroke: (stroke: Stroke, id?: string) => void
-  setFinish: (id?: string) => void
+  setFinish: (userId?: string, strokeId?: string, finishedStroke?: Stroke) => void
   newUser: (id: string) => void
   delUser: (id: string) => void
-  pushOtherPoints: (pts: Point[], id: string) => void
+  pushOtherPoints: (pts: Point[], id: string, strokeId?: string) => void
   getBoard: () => Board
   newOthers: (others: string[]) => void
+  replaceStrokeId: (tempId: string, realId: string) => void
+  handleRemoteRemoval: (ids: string[]) => void
+  handleLocalErase: (ids: string[], removedStrokes?: Stroke[]) => void
+  requestUndo: () => void
+  requestRedo: () => void
+  handleRestoreStrokes: (strokes: Stroke[]) => void
 }

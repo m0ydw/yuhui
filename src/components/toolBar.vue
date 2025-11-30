@@ -4,6 +4,8 @@
     <pen></pen>
     <div class="move" ref="move"></div>
     <ereaser></ereaser>
+    <button class="undo-btn" @click="onUndo">撤销</button>
+    <button class="redo-btn" @click="onRedo">撤回</button>
   </div>
 </template>
 
@@ -13,12 +15,14 @@ import { toolBarPointer } from '@/models';
 import hand from './toolBar/hand.vue'
 import pen from './toolBar/pen.vue';
 import ereaser from './toolBar/ereaser.vue';
+import useClientStore from '@/stores/clientStores';
 const position = ref({ x: 0, y: 0 })
 const move = ref<HTMLDivElement | null>(null)
 const main = ref<HTMLDivElement | null>(null)
 const container = { w: 0, h: 0 }
 //清理函数
 let cleanup: (() => void) | null = null
+const clientStore = useClientStore()
 const positionStyle = computed(() => ({
   left: `${position.value.x}px`,  // 直接修改 left
   top: `${position.value.y}px`,   // 直接修改 top
@@ -47,6 +51,14 @@ onMounted(() => {
 onUnmounted(() => {
   cleanup?.()
 })
+
+function onUndo() {
+  clientStore.getFlow()?.requestUndo()
+}
+
+function onRedo() {
+  clientStore.getFlow()?.requestRedo()
+}
 </script>
 
 <style>
@@ -71,6 +83,27 @@ onUnmounted(() => {
 
 .toolBar>div:first-child {
   margin-left: 0px;
+}
+
+.undo-btn {
+  margin-left: 8px;
+  padding: 6px 10px;
+  border: 1px solid #999;
+  background: #fff;
+  cursor: pointer;
+}
+
+.undo-btn:hover,
+.redo-btn:hover {
+  background: #f5f5f5;
+}
+
+.redo-btn {
+  margin-left: 4px;
+  padding: 6px 10px;
+  border: 1px solid #999;
+  background: #fff;
+  cursor: pointer;
 }
 </style>
 666

@@ -5,10 +5,11 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/draw',
+      redirect: '/allRoom',
     },
     {
       path: '/draw',
+      name: 'draw',
       component: () => import('../views/Board.vue'),
     },
     {
@@ -20,6 +21,11 @@ const router = createRouter({
       path: '/register',
       name: 'Register',
       component: () => import('../views/Register.vue'),
+    },
+    {
+      path: '/allRoom',
+      name: 'allRoom',
+      component: () => import('../views/allRoom.vue'),
     },
   ],
 })
