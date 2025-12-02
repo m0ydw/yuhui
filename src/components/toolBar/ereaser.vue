@@ -1,9 +1,13 @@
 <template>
-  <div class="tool-btn eraser" :class="{ active: isActive }" @pointerdown="onPointerDown" @pointerup="onPointerUp"
-    @click.stop>
-    <svg viewBox="0 0 24 24" width="28" height="28">
-      <path d="M16.5 3L21 7.5L10.5 18L4 18L4 14.5L14.5 4L16.5 3Z" fill="none" stroke="currentColor" stroke-width="2" />
-      <path d="M4 18L3 21L6 20L16.5 9.5L14.5 7.5L4 18Z" fill="currentColor" />
+  <div class="ereaser" :class="{ active: isActive }" @pointerdown="onPointerDown" @pointerup="onPointerUp" @click.stop>
+    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2"
+      stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke-width="1.5">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+        <path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3">
+        </path>
+        <path d="M18 13.3l-6.3 -6.3"></path>
+      </g>
     </svg>
   </div>
 </template>
@@ -29,3 +33,10 @@ const onPointerUp = (e: PointerEvent) => {
   el.releasePointerCapture(e.pointerId)
 }
 </script>
+
+<style>
+.toolBar .ereaser {
+  width: 50px;
+  height: 50px;
+}
+</style>

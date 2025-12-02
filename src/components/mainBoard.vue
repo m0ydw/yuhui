@@ -22,7 +22,6 @@ import {
   newStrokeFlow,//新建用户队列
   setupHighResolutionCanvas,//高分辨率canvas
   resizeCanvas,//挂载缩放事件
-  throttle,//节流
   newBoard,//new一个board二维表格空间
 } from '@/utils'
 import { useRoute, useRouter } from 'vue-router'
@@ -61,7 +60,6 @@ onMounted(async () => {
     userId = await myWebsocketClient.connect()
     //尝试加入对应room
     myWebsocketClient.send(sendIAmJoin(roomId.toString(), userId))
-
     //等待服务器响应
     const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
     console.log('响应', joinRes)
@@ -93,8 +91,10 @@ onMounted(async () => {
     boardReady.value = true
     //创建用户队列
     userQueue = newStrokeFlow(userId, ctx.value, boardData)
+    // board关联userqueue
+    boardData.containQueue(userQueue)
     clientStore.setFlow(userQueue)
-    //注册监听
+    //注册鼠标交互监听
     cleanup = canvasPointer(canvas.value, ctx.value, boardData, userQueue)
     // 初次渲染
     boardData.render(ctx.value, canvas.value)
@@ -102,7 +102,7 @@ onMounted(async () => {
     if (boardData)
       window.addEventListener(
         'resize',
-        throttle(() => resizeCanvas(canvas.value, windowVw, windowVh, boardData!, ctx.value), 10),
+        () => resizeCanvas(canvas.value, windowVw, windowVh, boardData!, ctx.value)
       )
     //初始绘图样式？
   }

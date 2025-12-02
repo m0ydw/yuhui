@@ -1,10 +1,18 @@
 <!-- HandTool.vue -->
 <template>
-  <div class="tool-btn hand" :class="{ active: isActive }" @pointerdown="onPointerDown" @pointerup="onPointerUp"
+  <div class="handBtn hand" :class="{ active: isActive }" @pointerdown="onPointerDown" @pointerup="onPointerUp"
     @click.stop>
-    <svg viewBox="0 0 24 24" width="28" height="28">
-      <path d="M9 3V7H7V3H9ZM11 3V11H13V3H11ZM15 3V9H17V3H15ZM19 3V11H21V3H19Z" fill="currentColor" />
-      <path d="M3 21L7 17H21L17 21H3Z" fill="currentColor" />
+    <svg aria-hidden="true" focusable="false" role="img" viewBox="0 0 24 24" class="" fill="none" stroke-width="2"
+      stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <g stroke-width="1.25">
+        <path stroke="none" d="M0 0h24v24H0z" fill="none"></path>
+        <path d="M8 13v-7.5a1.5 1.5 0 0 1 3 0v6.5"></path>
+        <path d="M11 5.5v-2a1.5 1.5 0 1 1 3 0v8.5"></path>
+        <path d="M14 5.5a1.5 1.5 0 0 1 3 0v6.5"></path>
+        <path
+          d="M17 7.5a1.5 1.5 0 0 1 3 0v8.5a6 6 0 0 1 -6 6h-2h.208a6 6 0 0 1 -5.012 -2.7a69.74 69.74 0 0 1 -.196 -.3c-.312 -.479 -1.407 -2.388 -3.286 -5.728a1.5 1.5 0 0 1 .536 -2.022a1.867 1.867 0 0 1 2.28 .28l1.47 1.47">
+        </path>
+      </g>
     </svg>
   </div>
 </template>
@@ -36,7 +44,7 @@ const onPointerUp = (e: PointerEvent) => {
 </script>
 
 <style scoped>
-.tool-btn {
+.handBtn {
   width: 50px;
   height: 50px;
   border-radius: 8px;
@@ -49,12 +57,12 @@ const onPointerUp = (e: PointerEvent) => {
   user-select: none;
 }
 
-.tool-btn:hover {
+.handBtn:hover {
   background: rgba(0, 0, 0, 0.08);
   color: #333;
 }
 
-.tool-btn.active {
+.handBtn.active {
   background: #1976d2;
   color: white;
   box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);

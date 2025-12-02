@@ -1,6 +1,6 @@
 <template>
   <div class="selectBar" ref="box" v-if="toolBarStore.isNeedDisplay()">
-    <penSelect></penSelect>
+    <penSelect v-if="toolBarStore.getTool() === 'pen'"></penSelect>
   </div>
 </template>
 
@@ -25,12 +25,10 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onClick));
 <style scoped>
 .selectBar {
   position: absolute;
-  width: 100px;
-  height: 200px;
-  background-color: aqua;
   left: 20px;
   top: 20px;
   border-radius: 10px;
   box-shadow: 0px 0px 6px 0px black;
+  background-color: #fff;
 }
 </style>

@@ -27,7 +27,7 @@ function newUserFlow(): allFlowItem {
   }
 }
 import { myWebsocketClient } from '@/models/webSocket/cilentExample'
-
+// 临时的strokeid
 function generateTempStrokeId(): string {
   const randomPart =
     typeof crypto !== 'undefined' && crypto.randomUUID
@@ -35,6 +35,7 @@ function generateTempStrokeId(): string {
       : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
   return `temp_${randomPart}`
 }
+
 //点的组队发送，节流
 function sendThrottler() {
   let willSend: Point[] = []
@@ -112,21 +113,21 @@ export function newStrokeFlow(
   const LOCAL_HISTORY_LIMIT = 50
   const localUndoStack: LocalOperation[] = []
   const localRedoStack: LocalOperation[] = []
-
+  // 获取id对应人的队列
   function ensureUserFlow(userId: string): allFlowItem {
     if (!allFlow.has(userId)) {
       allFlow.set(userId, newUserFlow())
     }
     return allFlow.get(userId)!
   }
-
+  // 开始渲染
   function startRender() {
     if (!isRender) {
       requestAnimationFrame(render)
       isRender = true
     }
   }
-
+  // 获取真实的id
   function resolveStrokeId(strokeId: string): string {
     let current = strokeId
     const guard = new Set<string>()
@@ -452,6 +453,34 @@ export function newStrokeFlow(
       }
       bd.addStrokes(strokes.map((stroke) => ({ ...stroke })))
       bd.render(ctx, canvasEl)
+    },
+    resetStroke() {
+      // 重绘所有未完成的笔画
+
+      for (const [, value] of allFlow) {
+        let arr = value.strokes.getAllStroke()
+        for (let i = 0; i < arr.length; i++) {
+          let st = arr[i]
+          if (!st) continue
+          ctx.save()
+          ctx.translate(bd.getPanx(), bd.getPany())
+          ctx.scale(bd.getZoom(), bd.getZoom())
+          ctx.beginPath()
+          ctx.lineCap = 'round'
+          ctx.lineJoin = 'round'
+          ctx.lineWidth = st.width
+          ctx.strokeStyle = st.color
+          for (const pt of st.points) {
+            let x = pt.x + st.head.x
+            let y = pt.y + st.head.y
+            ctx.lineTo(x, y)
+          }
+          st.now = st.points.length - 1
+
+          ctx.stroke()
+          ctx.restore()
+        }
+      }
     },
   }
 }

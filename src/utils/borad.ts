@@ -1,12 +1,6 @@
-import type { Point, Stroke, Board } from '@/models/types'
+import type { Point, Stroke, Board, strokeFlow } from '@/models/types'
 import type { Ref } from 'vue'
 import { pointToSegmentDistance2 } from './pointUtils'
-function distance2(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const dx = a.x - b.x
-  const dy = a.y - b.y
-  return dx * dx + dy * dy
-}
-
 export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Board {
   //每格大小
   const GRID_SIZE = gridSize
@@ -15,6 +9,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   const strokeIndex: Map<string, Stroke> = new Map()
   //空间哈希表
   const gridMap: Map<string, Stroke[]> = new Map()
+  let userQueue: null | strokeFlow = null
   //视窗大小
   //逻辑画布偏移量
   let panX = 0,
@@ -52,30 +47,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         _removeStrokeFromGrid(duplicated)
       }
     }
-    const seen = new Set<string>()
-    //对head处理
-    const headKey = key(stroke.head.x, stroke.head.y)
-    if (!seen.has(headKey)) {
-      seen.add(headKey)
-      if (!gridMap.has(headKey)) {
-        gridMap.set(headKey, [])
-        //没有则初始化
-      }
-      // 然后push
-      gridMap.get(headKey)!.push(stroke)
-    }
-    stroke.points.forEach((p) => {
-      const k = key(p.x + stroke.head.x, p.y + stroke.head.y)
-      if (!seen.has(k)) {
-        seen.add(k)
-        if (!gridMap.has(k)) {
-          //没有则初始化
-          gridMap.set(k, [])
-        }
-        // 然后push
-        gridMap.get(k)!.push(stroke)
-      }
-    })
+    //以上为id逻辑
+    addStrokeToGrid(stroke, gridMap, GRID_SIZE, key)
     //插入全局 数组
     orderedStrokes.push(stroke)
     strokeIndex.set(stroke.id, stroke)
@@ -162,26 +135,31 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     })
 
     ctx.restore()
+
+    userQueue?.resetStroke()
   }
   let rafId = 0
-  //定时raf渲染（60fps）
-  let lastRenderTime = 0
-  const MIN_INTERVAL = 16 // 1000 / 60 ≈ 16.66，最多 60fps
+  let lastCallTime = 0
   const rafRender = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
-    cancelAnimationFrame(rafId)
+    lastCallTime = performance.now() // 外部调用时间刷新
 
-    const tryRender = (now: number) => {
-      if (now - lastRenderTime >= MIN_INTERVAL) {
-        lastRenderTime = now
-        _render(ctx, canvas)
-      } else {
-        // 没到时间，继续等下一帧（保证不会丢帧）
-        rafId = requestAnimationFrame(() => tryRender(performance.now()))
+    // RAF 正在运行，直接更新 lastCallTime 即可
+    if (rafId !== 0) return
+
+    // 启动 RAF 循环
+    const loop = (now: number) => {
+      //50ms未调用 自动停止
+      if (now - lastCallTime > 50) {
+        cancelAnimationFrame(rafId)
+        rafId = 0 // 必须重置，这样才能下次重新启动
         return
       }
+      _render(ctx, canvas)
+      // 保持 RAF 运行
+      rafId = requestAnimationFrame(loop)
     }
-
-    rafId = requestAnimationFrame(() => tryRender(performance.now()))
+    // 启动
+    rafId = requestAnimationFrame(loop)
   }
 
   //新加入
@@ -267,7 +245,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
       panX += x
       panY += y
-      _render(ctx, canvas)
+      rafRender(ctx, canvas)
     },
     getZoom: (): number => {
       return zoom
@@ -291,7 +269,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       // 4. 保持该中心点在屏幕中心不动
       panX = cx - worldCX * zoom
       panY = cy - worldCY * zoom
-      _render(ctx, canvas)
+      rafRender(ctx, canvas)
     },
     resize: (width: number, height: number) => {
       vw.value = width
@@ -305,7 +283,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       history.forEach((value) => {
         _addStroke(value)
       })
-      _render(ctx, canvas)
+      rafRender(ctx, canvas)
     },
     replaceStrokeId: (oldId: string, newId: string) => _replaceStrokeId(oldId, newId),
     removeStrokesById: (ids: string[]): Stroke[] => {
@@ -327,7 +305,9 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     },
 
     // 2. 收集橡皮路径上的笔画（鼠标移动时频繁调用）
-    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 12) => {
+    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 1) => {
+      // 除去缩放保证相对屏幕大小不变
+      eraserRadius /= zoom
       if (screenPoints.length === 0) return
 
       const worldPoints = screenPoints.map((p) => ({
@@ -435,5 +415,76 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     // 5. （可选）获取最近一次删除的笔画，用于 undo
     getLastErasedStrokes: (): Stroke[] => lastErasedStrokes,
     // 橡皮调用的渲染
+    containQueue: (aim: strokeFlow) => {
+      if (userQueue === null) {
+        userQueue = aim
+      }
+    },
+  }
+}
+
+// 用于修改笔画加入表格的逻辑
+// 工具：将线段 (x1,y1) → (x2,y2) 覆盖的网格全部加入
+export function addLineCoveredCells(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  gridSize: number,
+  put: (x: number, y: number) => void,
+) {
+  const dx = x2 - x1
+  const dy = y2 - y1
+
+  // 使用 DDA 网格穿越
+  const steps = Math.ceil(Math.max(Math.abs(dx), Math.abs(dy)) / gridSize)
+  if (steps <= 0) return
+
+  const stepx = dx / steps
+  const stepy = dy / steps
+
+  for (let i = 0; i <= steps; i++) {
+    const x = x1 + stepx * i
+    const y = y1 + stepy * i
+    put(x, y)
+  }
+}
+
+/**
+ * 工具：将整条笔画加入 gridMap（按线段覆盖）
+ * 不依赖 newBoard，只要求你传入 stroke + gridMap + key方法
+ */
+export function addStrokeToGrid(
+  stroke: {
+    head: { x: number; y: number }
+    points: { x: number; y: number }[]
+    // 其他字段无所谓
+  },
+  gridMap: Map<string, any[]>,
+  gridSize: number,
+  key: (x: number, y: number) => string,
+) {
+  // 工具：向 gridMap 插入 stroke
+  const put = (x: number, y: number) => {
+    const k = key(x, y)
+    if (!gridMap.has(k)) gridMap.set(k, [])
+    gridMap.get(k)!.push(stroke)
+  }
+
+  const hx = stroke.head.x
+  const hy = stroke.head.y
+
+  // 1. 先加入 head 点
+  put(hx, hy)
+
+  // 2. 遍历所有线段
+  const pts = stroke.points
+  for (let i = 0; i < pts.length; i++) {
+    const x1 = i === 0 ? hx : pts[i - 1]!.x + hx
+    const y1 = i === 0 ? hy : pts[i - 1]!.y + hy
+    const x2 = pts[i]!.x + hx
+    const y2 = pts[i]!.y + hy
+
+    addLineCoveredCells(x1, y1, x2, y2, gridSize, put)
   }
 }

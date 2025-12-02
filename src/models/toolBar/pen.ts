@@ -19,7 +19,7 @@ export function pen_Down(
   keyPoints.points.push({ x: 0, y: 0, t: lastPoint.t, p: lastPoint.p })
   //设置样式
   keyPoints.color = toolBarStores.getNowColor()
-  keyPoints.width = 5
+  keyPoints.width = toolBarStores.getPenSize()
   userQueue.pushStroke(keyPoints)
 }
 

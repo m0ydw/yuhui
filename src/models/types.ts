@@ -62,6 +62,7 @@ export interface Board {
   /** （可选）获取最近一次橡皮擦删除的笔画，用于精细 undo */
   getLastErasedStrokes: () => Stroke[]
   // 橡皮渲染
+  containQueue: (aim: strokeFlow) => void
 }
 //工具类型
 export type toolMode = 'hand' | 'pen' | 'eraser'
@@ -96,6 +97,9 @@ export class StrokeQueue {
   }
   getTeil(): Stroke | undefined {
     return this.items.get(this.tail)
+  }
+  getAllStroke(): Stroke[] {
+    return [...this.items.values()]
   }
   // 创建并添加新笔画到队尾
   enqueueNewStroke(stroke: Stroke): void {
@@ -192,6 +196,12 @@ export class StrokeQueue {
   queueShouleRender(): boolean {
     return this.queueNeedRender
   }
+  resetStroke() {
+    for (const [, value] of this.items) {
+      if (!value.finish) value.now = 0
+    }
+    this.queueNeedRender = true
+  }
 }
 //单人的
 export interface allFlowItem {
@@ -213,4 +223,5 @@ export interface strokeFlow {
   requestUndo: () => void
   requestRedo: () => void
   handleRestoreStrokes: (strokes: Stroke[]) => void
+  resetStroke: () => void
 }

@@ -2,8 +2,10 @@
   <div class="toolBar" :style="positionStyle" ref="main">
     <hand></hand>
     <pen></pen>
-    <div class="move" ref="move"></div>
     <ereaser></ereaser>
+    <div class="move" ref="move">
+      <moveTool></moveTool>
+    </div>
     <button class="undo-btn" @click="onUndo">撤销</button>
     <button class="redo-btn" @click="onRedo">撤回</button>
   </div>
@@ -16,6 +18,7 @@ import hand from './toolBar/hand.vue'
 import pen from './toolBar/pen.vue';
 import ereaser from './toolBar/ereaser.vue';
 import useClientStore from '@/stores/clientStores';
+import moveTool from './toolBar/moveTool.vue';
 const position = ref({ x: 0, y: 0 })
 const move = ref<HTMLDivElement | null>(null)
 const main = ref<HTMLDivElement | null>(null)
@@ -46,7 +49,6 @@ onMounted(() => {
   }
 })
 
-
 //结束
 onUnmounted(() => {
   cleanup?.()
@@ -64,17 +66,11 @@ function onRedo() {
 <style>
 .toolBar {
   position: absolute;
-  width: 200px;
   padding: 5px;
   border: 1px solid silver;
   margin: 3px;
 }
 
-.toolBar .move {
-  background-color: aqua;
-  width: 50px;
-  height: 50px;
-}
 
 .toolBar div {
   float: left;
@@ -106,4 +102,3 @@ function onRedo() {
   cursor: pointer;
 }
 </style>
-666

@@ -33,7 +33,6 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-
 const props = defineProps({
   modelValue: { type: String, default: '#409eff' },
   preset: {
@@ -241,7 +240,7 @@ function applyHex(c) {
 }
 
 .hex input {
-  width: 100%;
+  width: 100px;
   height: 24px;
   padding: 0 4px;
   border: 1px solid #ccc;
