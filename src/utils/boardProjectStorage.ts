@@ -16,53 +16,105 @@ export type BoardProjectDetail = {
   boardState: BoardViewState
 }
 
-const PROJECTS_INDEX_KEY = 'yuhui_board_projects'
-const PROJECT_DETAIL_KEY_PREFIX = 'yuhui_board_project_'
+type BoardProjectRecord = BoardProjectMeta & BoardProjectDetail
 
-function safeJsonParse<T>(raw: string | null): T | null {
-  if (!raw) return null
-  try {
-    return JSON.parse(raw) as T
-  } catch {
-    return null
-  }
+const DB_NAME = 'yuhui-board'
+const DB_VERSION = 1
+const STORE_NAME = 'projects'
+
+let dbPromise: Promise<IDBDatabase> | null = null
+
+function openDb(): Promise<IDBDatabase> {
+  if (dbPromise) return dbPromise
+  dbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION)
+    req.onerror = () => reject(req.error)
+    req.onupgradeneeded = () => {
+      const db = req.result
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        const store = db.createObjectStore(STORE_NAME, { keyPath: 'id' })
+        store.createIndex('updatedAt', 'updatedAt', { unique: false })
+      }
+    }
+    req.onsuccess = () => resolve(req.result)
+  })
+  return dbPromise
 }
 
-function cloneJson<T>(obj: T): T {
-  // localStorage 只能存 JSON，这里直接走 JSON clone（避免 structuredClone 兼容问题）
-  return JSON.parse(JSON.stringify(obj)) as T
+function txStore(
+  mode: IDBTransactionMode,
+): Promise<{ db: IDBDatabase; store: IDBObjectStore; tx: IDBTransaction }> {
+  return openDb().then((db) => {
+    const tx = db.transaction(STORE_NAME, mode)
+    const store = tx.objectStore(STORE_NAME)
+    return { db, store, tx }
+  })
 }
 
-export function listBoardProjects(): BoardProjectMeta[] {
-  const data = safeJsonParse<{ list: BoardProjectMeta[] }>(localStorage.getItem(PROJECTS_INDEX_KEY))
-  return (data?.list || []).slice().sort((a, b) => b.updatedAt - a.updatedAt)
+export async function listBoardProjects(): Promise<BoardProjectMeta[]> {
+  const { store } = await txStore('readonly')
+  const req = store.getAll()
+  const records: BoardProjectRecord[] = await new Promise((resolve, reject) => {
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => resolve(req.result as BoardProjectRecord[])
+  })
+  return records
+    .map<BoardProjectMeta>((r) => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.createdAt,
+      updatedAt: r.updatedAt,
+      previewDataUrl: r.previewDataUrl,
+      strokeCount: r.strokeCount,
+    }))
+    .sort((a, b) => b.updatedAt - a.updatedAt)
 }
 
-export function getBoardProjectDetail(id: string): BoardProjectDetail | null {
+export async function getBoardProjectDetail(id: string): Promise<BoardProjectDetail | null> {
   if (!id) return null
-  return safeJsonParse<BoardProjectDetail>(localStorage.getItem(PROJECT_DETAIL_KEY_PREFIX + id))
-}
-
-export function upsertBoardProject(meta: BoardProjectMeta, detail: BoardProjectDetail) {
-  const list = listBoardProjects()
-  const idx = list.findIndex((p) => p.id === meta.id)
-  const normalizedMeta = cloneJson(meta)
-  const normalizedDetail = cloneJson(detail)
-
-  if (idx >= 0) {
-    list[idx] = normalizedMeta
-  } else {
-    list.unshift(normalizedMeta)
+  const { store } = await txStore('readonly')
+  const req = store.get(id)
+  const rec = await new Promise<BoardProjectRecord | undefined>((resolve, reject) => {
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => resolve(req.result as BoardProjectRecord | undefined)
+  })
+  if (!rec) return null
+  return {
+    strokes: rec.strokes,
+    boardState: rec.boardState,
   }
-
-  localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify({ list }))
-  localStorage.setItem(PROJECT_DETAIL_KEY_PREFIX + meta.id, JSON.stringify(normalizedDetail))
 }
 
-export function deleteBoardProject(id: string) {
-  const list = listBoardProjects().filter((p) => p.id !== id)
-  localStorage.setItem(PROJECTS_INDEX_KEY, JSON.stringify({ list }))
-  localStorage.removeItem(PROJECT_DETAIL_KEY_PREFIX + id)
+export async function upsertBoardProject(meta: BoardProjectMeta, detail: BoardProjectDetail) {
+  const { store, tx } = await txStore('readwrite')
+  const record: BoardProjectRecord = {
+    ...meta,
+    ...detail,
+  }
+  const req = store.put(record)
+  await new Promise<void>((resolve, reject) => {
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => resolve()
+  })
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
+}
+
+export async function deleteBoardProject(id: string) {
+  const { store, tx } = await txStore('readwrite')
+  const req = store.delete(id)
+  await new Promise<void>((resolve, reject) => {
+    req.onerror = () => reject(req.error)
+    req.onsuccess = () => resolve()
+  })
+  await new Promise<void>((resolve, reject) => {
+    tx.oncomplete = () => resolve()
+    tx.onerror = () => reject(tx.error)
+    tx.onabort = () => reject(tx.error)
+  })
 }
 
 export function generateProjectId() {

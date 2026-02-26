@@ -106,7 +106,7 @@ export function newStrokeFlow(
   const allFlow = new Map<string, allFlowItem>([[myId, newUserFlow()]])
   const userActiveStroke = new Map<string, string>()
   const idAlias = new Map<string, string>()
-  let isRender: boolean = false
+  // 渲染交由 Board.render + resetStroke 统一调度，这里不再维护单独的 RAF 循环
   const isOffline = myId === '0'
 
   type LocalOperation = { type: 'draw' | 'erase'; strokes: Stroke[] }
@@ -122,10 +122,8 @@ export function newStrokeFlow(
   }
   // 开始渲染
   function startRender() {
-    if (!isRender) {
-      requestAnimationFrame(render)
-      isRender = true
-    }
+    // 直接请求 Board 做一次渲染（其内部有自己的 RAF 合批逻辑）
+    bd.render(ctx, canvasEl)
   }
   // 获取真实的id
   function resolveStrokeId(strokeId: string): string {
@@ -235,49 +233,6 @@ export function newStrokeFlow(
     return true
   }
 
-  function render() {
-    let once = false
-    for (const [, value] of allFlow) {
-      if (value.strokes.queueShouleRender()) {
-        once = true
-        const nowRender = value.strokes.getHead()
-        if (!nowRender) {
-          continue
-        }
-        if (nowRender.finish && nowRender.now === nowRender.points.length - 1) {
-          const willAdd = value.strokes.finishRender()
-          bd.addStroke(willAdd)
-        } else {
-          ctx.save()
-          ctx.translate(bd.getPanx(), bd.getPany())
-          ctx.scale(bd.getZoom(), bd.getZoom())
-          ctx.beginPath()
-          const last = nowRender.points[nowRender.now]
-          if (last) {
-            ctx.moveTo(nowRender.head.x + last.x, nowRender.head.y + last.y)
-          }
-          ctx.lineCap = 'round'
-          ctx.lineJoin = 'round'
-          ctx.lineWidth = nowRender.width
-          ctx.strokeStyle = nowRender.color
-          for (let i = nowRender.now + 1; i < nowRender.points.length; i++) {
-            let x = (nowRender.points[i] as Point).x + nowRender.head.x
-            let y = (nowRender.points[i] as Point).y + nowRender.head.y
-            ctx.lineTo(x, y)
-          }
-          ctx.stroke()
-          nowRender.now = nowRender.points.length - 1
-          ctx.restore()
-        }
-      }
-    }
-    if (once) {
-      requestAnimationFrame(render)
-    } else {
-      isRender = false
-    }
-  }
-
   function broadcastStrokeStart(stroke: Stroke) {
     if (myId === '0') return
     myThrotter.newStroke(stroke.id)
@@ -347,6 +302,10 @@ export function newStrokeFlow(
           if (isOffline && userId === myId) {
             recordLocalDraw(cloneStrokeData(last))
           }
+          // 将完成的笔画从队列移入 Board（本地与远端用户统一走这里）
+          const completed = myQueue.strokes.finishRender()
+          bd.addStroke(completed)
+          bd.render(ctx, canvasEl)
         }
       }
       clearActive(userId, strokeId)

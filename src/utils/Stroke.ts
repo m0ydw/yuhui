@@ -20,5 +20,6 @@ export function newStroke(
     now,
     width,
     finish,
+    shape: 'free',
   } as Stroke
 }

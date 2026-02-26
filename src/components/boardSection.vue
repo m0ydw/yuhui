@@ -28,6 +28,7 @@ const props = withDefaults(defineProps<{ items?: Item[] }>(), {
     { key: 'load', label: '读取' },
     { key: 'export', label: '导出图片' },
     { key: 'clear', label: '清空画布' },
+    { key: 'grid', label: '网格线开关' },
   ]
 })
 

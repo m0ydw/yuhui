@@ -4,6 +4,9 @@ import toolBarData from '@/stores/toolBarStores'
 import { pen_Down, pen_Move, pen_Up } from './toolBar/pen'
 import { hand_Down, hand_Move, hand_Up } from './toolBar/hand'
 import { eraser_Down, eraser_Move, eraser_Up } from './toolBar/eraser'
+import { line_Down, line_Move, line_Up } from './toolBar/line'
+import { rect_Down, rect_Move, rect_Up } from './toolBar/rect'
+import { polyline_Down, polyline_Move, polyline_Finish } from './toolBar/polyline'
 export function canvasPointer(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
@@ -30,6 +33,18 @@ export function canvasPointer(
       case 'eraser': // 新增！
         eraser_Down(board, ctx, canvas, offsetX, offsetY)
         break
+      case 'line':
+        line_Down(userQueue, board, x, y)
+        board.render(ctx, canvas)
+        break
+      case 'rect':
+        rect_Down(userQueue, board, x, y)
+        board.render(ctx, canvas)
+        break
+      case 'polyline':
+        polyline_Down(userQueue, board, x, y, e.button)
+        board.render(ctx, canvas)
+        break
     }
   }
   const mouseMove = (e: PointerEvent) => {
@@ -48,6 +63,18 @@ export function canvasPointer(
         break
       case 'eraser': // 新增！
         eraser_Move(board, ctx, canvas, offsetX, offsetY)
+        break
+      case 'line':
+        line_Move(userQueue, board, x, y)
+        board.render(ctx, canvas)
+        break
+      case 'rect':
+        rect_Move(userQueue, board, x, y)
+        board.render(ctx, canvas)
+        break
+      case 'polyline':
+        polyline_Move(userQueue, board, x, y)
+        board.render(ctx, canvas)
         break
     }
   }
@@ -72,6 +99,19 @@ export function canvasPointer(
             userQueue.handleLocalErase(ids, removed)
           }
         }
+        break
+      case 'line':
+        line_Up(userQueue, board)
+        board.render(ctx, canvas)
+        break
+      case 'rect':
+        rect_Up(userQueue, board)
+        board.render(ctx, canvas)
+        break
+      case 'polyline':
+        // polyline 只在右键时结束，这里统一刷新一下
+        polyline_Finish(userQueue, board)
+        board.render(ctx, canvas)
         break
     }
     canvas.releasePointerCapture(e.pointerId)

@@ -18,6 +18,8 @@ export interface Stroke {
   finish: boolean
   version?: number
   ownerId?: string
+  /** 笔画类型：自由线条/直线/矩形/折线等 */
+  shape?: 'free' | 'line' | 'rect' | 'polyline'
 }
 //数据表格
 export type gridMap = Map<string, Stroke[]>
@@ -65,6 +67,9 @@ export interface Board {
   removeStrokesById: (ids: string[]) => Stroke[]
   getStrokeById: (id: string) => Stroke | undefined
   clearAll: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
+  setShowGrid: (show: boolean) => void
+  toggleGrid: () => void
+  getShowGrid: () => boolean
   // 新增橡皮擦相关函数（全部加上！）
   /** 开始橡皮擦模式（鼠标按下） */
   startErasing: () => void
@@ -86,7 +91,7 @@ export interface Board {
   getAllStrokes: () => Stroke[]
 }
 //工具类型
-export type toolMode = 'hand' | 'pen' | 'eraser'
+export type toolMode = 'hand' | 'pen' | 'eraser' | 'line' | 'rect' | 'polyline'
 export interface myTool {
   toolName: toolMode
   penSize: number

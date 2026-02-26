@@ -20,6 +20,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     panY = 0
   //缩放系数
   let zoom = 1
+  // 网格开关
+  let showGrid = false
   //将世界坐标转化对应到表格的string(内部工具函数)
   const key = (x: number, y: number) => `${Math.floor(x / gridSize)},${Math.floor(y / gridSize)}`
   //画布坐标转化为世界坐标
@@ -68,15 +70,20 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     return { gx: Number(xs), gy: Number(ys) }
   }
 
-  function ensureTile(k: string): { tile: HTMLCanvasElement; tileCtx: CanvasRenderingContext2D; gx: number; gy: number } {
+  let tileScale = 1 // 随 zoom 提升时提高 tile 分辨率
+
+  function ensureTile(
+    k: string,
+  ): { tile: HTMLCanvasElement; tileCtx: CanvasRenderingContext2D; gx: number; gy: number } {
     const existing = tileMap.get(k)
     const { gx, gy } = parseGridKey(k)
     if (existing) {
       return { tile: existing, tileCtx: tileCtxMap.get(k)!, gx, gy }
     }
     const canvas = document.createElement('canvas')
-    canvas.width = GRID_SIZE
-    canvas.height = GRID_SIZE
+    const size = Math.max(GRID_SIZE, Math.floor(GRID_SIZE * tileScale))
+    canvas.width = size
+    canvas.height = size
     const tileCtx = canvas.getContext('2d')
     if (!tileCtx) {
       throw new Error('无法创建 tile CanvasRenderingContext2D')
@@ -140,7 +147,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       return
     }
     const { tileCtx, gx, gy } = ensureTile(k)
-    tileCtx.clearRect(0, 0, GRID_SIZE, GRID_SIZE)
+    const size = Math.max(GRID_SIZE, Math.floor(GRID_SIZE * tileScale))
+    tileCtx.clearRect(0, 0, size, size)
     const ox = gx * GRID_SIZE
     const oy = gy * GRID_SIZE
     // 去重，避免同一 stroke 在 cell 里重复出现时重复绘制
@@ -189,6 +197,36 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     const maxGX = Math.floor(botRight.x / GRID_SIZE)
     const minGY = Math.floor(topLeft.y / GRID_SIZE)
     const maxGY = Math.floor(botRight.y / GRID_SIZE)
+
+    // 根据当前缩放动态调整 tile 分辨率（放大时更高清）
+    const targetScale = Math.max(1, Math.min(4, Math.floor(zoom)))
+    if (targetScale !== tileScale) {
+      tileScale = targetScale
+      // 全量标脏，下一帧重建为新的高分辨率
+      gridMap.forEach((_, k) => dirtyTiles.add(k))
+    }
+
+    // 网格线（可选）
+    if (showGrid) {
+      ctx.save()
+      ctx.strokeStyle = '#e0e0e0'
+      ctx.lineWidth = 1 / zoom
+      for (let gx = minGX; gx <= maxGX; gx++) {
+        const x = gx * GRID_SIZE
+        ctx.beginPath()
+        ctx.moveTo(x, topLeft.y)
+        ctx.lineTo(x, botRight.y)
+        ctx.stroke()
+      }
+      for (let gy = minGY; gy <= maxGY; gy++) {
+        const y = gy * GRID_SIZE
+        ctx.beginPath()
+        ctx.moveTo(topLeft.x, y)
+        ctx.lineTo(botRight.x, y)
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
 
     // 先把脏 tile 重建掉，避免 drawImage 出现旧内容
     if (dirtyTiles.size) {
@@ -565,6 +603,13 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     getAllStrokes() {
       return [...orderedStrokes]
     },
+    setShowGrid: (show: boolean) => {
+      showGrid = show
+    },
+    toggleGrid: () => {
+      showGrid = !showGrid
+    },
+    getShowGrid: () => showGrid,
   }
 }
 

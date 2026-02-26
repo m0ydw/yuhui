@@ -246,6 +246,12 @@ const handleSectionEmit = (key: string) => {
         userQueue: userQueue!,
       })
       break
+    case 'grid':
+      if (boardData && ctx.value && canvas.value) {
+        boardData.toggleGrid()
+        boardData.render(ctx.value, canvas.value)
+      }
+      break
   }
 }
 
