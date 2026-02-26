@@ -19,8 +19,8 @@ onMounted(() => {
 })
 
 async function createRoom() {
-  const data = await request<createRoom>('api/createCanvas')
-  roomId.value = data.roomId
+  const response = await request<createRoom>('api/createCanvas', 'GET')
+  roomId.value = response.data.roomId
 }
 
 </script>

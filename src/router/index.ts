@@ -4,10 +4,6 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
-      path: '/',
-      redirect: '/allRoom',
-    },
-    {
       path: '/draw',
       name: 'draw',
       component: () => import('../views/Board.vue'),
@@ -18,14 +14,13 @@ const router = createRouter({
       component: () => import('../views/Login.vue'),
     },
     {
-      path: '/register',
-      name: 'Register',
-      component: () => import('../views/Register.vue'),
-    },
-    {
       path: '/allRoom',
       name: 'allRoom',
       component: () => import('../views/allRoom.vue'),
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/login',
     },
   ],
 })

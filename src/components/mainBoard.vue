@@ -3,40 +3,54 @@
 <template>
   <div>
     <canvas width="600" height="600" id="drawboard"></canvas>
-    <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData"></scale>
-    <button @click="save(boardData)"></button>
+    <canvas id="cursorCanvas"></canvas>
+    <canvas id="otherCursorCanvas"></canvas>
+    <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
+    <boardSection @select="handleSectionEmit"></boardSection>
+    <!-- 弹窗 -->
+    <flexPop ref="popRef"></flexPop>
   </div>
 </template>
 
 <script setup lang="ts">
-
+import flexPop from './flexPop.vue'
+import boardSection from './boardSection.vue'
 import scale from './toolBar/scale.vue'
-import { ref, shallowRef, onMounted, onUnmounted, type Ref } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, type Ref, } from 'vue'
 import {
   canvasPointer,//捕获指针至canvas
   type Board, type Stroke,
   sendIAmJoin,//发送信息的封装
   addMainBoardEvent,//挂载websocket事件
+  cursorRender,
+  connectCursor,
+  addCursorEvent,
+  renderOtherCursor,
+  cursorMoveSend,
+  myWebsocketClient,//websocket实例
+  changeUserId,
+  getUserId,
+  addUsers,//初始化其他用户的cursor
 } from '@/models'
 import {
   newStrokeFlow,//新建用户队列
   setupHighResolutionCanvas,//高分辨率canvas
-  resizeCanvas,//挂载缩放事件
+  resizeDrawCanvas,//挂载缩放事件
+  resizeCursorCanvas,
   newBoard,//new一个board二维表格空间
+  boardDataToImage,
 } from '@/utils'
 import { useRoute, useRouter } from 'vue-router'
-import {
-  myWebsocketClient//websocket实例
-} from '@/models/webSocket/cilentExample'
 import useClientStore from '@/stores/clientStores'
 const router = useRouter()
 const route = useRoute()
 let hasPlayer = false
 //输入队列
 let userQueue: null | ReturnType<typeof newStrokeFlow> = null
-let userId = '0'
+//用于初始化
 let others: string[] | null = []
 let History: Stroke[] | null = []
+let otherCursors: any = []
 // // 进入单人模式
 // router.push('/draw')
 // 进入多人模式，指定房间
@@ -49,22 +63,24 @@ let boardData: Board | undefined = undefined
 let boardReady = ref(false)
 //清理函数
 let cleanup: (() => void) | null = null
-const clientStore = useClientStore()
-//初始化
+// 延迟获取store实例，避免在Pinia挂载前使用
+let clientStore: ReturnType<typeof useClientStore> | null = null
+//画板初始化
 onMounted(async () => {
   //确定模式
   await router.isReady()
   const roomId = route.query.roomId
   if (roomId) {
     //先进入多人
-    userId = await myWebsocketClient.connect()
+    changeUserId(await myWebsocketClient.connect())
     //尝试加入对应room
-    myWebsocketClient.send(sendIAmJoin(roomId.toString(), userId))
+    myWebsocketClient.send(sendIAmJoin(roomId.toString(), getUserId()))
     //等待服务器响应
     const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
     console.log('响应', joinRes)
     others = joinRes.data.others
     History = joinRes.data.history
+    otherCursors = joinRes.data.otherCursors
     switch (joinRes.data.status) {
       case true:
         console.log('连接成功')
@@ -72,6 +88,7 @@ onMounted(async () => {
 
       case false:
         console.log('连接失败')
+        //直接踢出多人状态
         break
     }
     //成功发送
@@ -89,8 +106,10 @@ onMounted(async () => {
     //board实例
     boardData = newBoard(1024, windowVw, windowVh)
     boardReady.value = true
+    //初始化store
+    clientStore = useClientStore()
     //创建用户队列
-    userQueue = newStrokeFlow(userId, ctx.value, boardData)
+    userQueue = newStrokeFlow(getUserId(), ctx.value, boardData)
     // board关联userqueue
     boardData.containQueue(userQueue)
     clientStore.setFlow(userQueue)
@@ -102,7 +121,7 @@ onMounted(async () => {
     if (boardData)
       window.addEventListener(
         'resize',
-        () => resizeCanvas(canvas.value, windowVw, windowVh, boardData!, ctx.value)
+        () => resizeDrawCanvas(canvas.value, windowVw, windowVh, boardData!, ctx.value)
       )
     //初始绘图样式？
   }
@@ -125,23 +144,89 @@ onMounted(async () => {
 
 
   }
+
+
+  /*          --------------------cursorCanvas初始化 ------------------------------                   */
+
+  let cursorCanvas = document.getElementById('cursorCanvas') as HTMLCanvasElement
+  let cursorCtx: CanvasRenderingContext2D
+  if (cursorCanvas) {
+    cursorCtx = setupHighResolutionCanvas(cursorCanvas)
+    // 监听的是下层
+    connectCursor(cursorCanvas, cursorCtx, boardData!, canvas.value)
+    canvas.value.addEventListener('pointermove', (e: PointerEvent) => {
+      //传输信息
+      cursorMoveSend(boardData!, e)
+      //
+      cursorRender(e)
+    })
+    canvas.value.addEventListener('pointerleave', () => {
+      cursorCtx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+    })
+  }
+
+  // resize函数
+  window.addEventListener(
+    'resize',
+    () => {
+      resizeCursorCanvas(cursorCanvas)
+    }
+
+  )
+
+  /*          --------------------otherCursorCanvas初始化 ------------------------------                   */
+  let otherCursorCanvas = document.getElementById('otherCursorCanvas') as HTMLCanvasElement
+  let otherCursorCtx: CanvasRenderingContext2D
+  if (otherCursorCanvas) {
+    otherCursorCtx = setupHighResolutionCanvas(otherCursorCanvas)
+    // 设置监听
+    addCursorEvent(boardData!, otherCursorCtx)
+    //初始化
+    if (otherCursors)
+      addUsers(otherCursors)
+
+  }
+  //resize函数
+  window.addEventListener(
+    'resize',
+    () => {
+      resizeCursorCanvas(otherCursorCanvas)
+      renderOtherCursor(true)//强制渲染
+    }
+
+  )
+  //取消引用释放内存
+  otherCursors = null
+
+
 })
 
-//结束时
+//画板结束时
 onUnmounted(() => {
   cleanup?.()
-  clientStore.setFlow(null)
+  clientStore?.setFlow(null)
 })
+//cursorcanvas初始化
 
-//调试
-function save(boardData: Board | undefined) {
-  if (boardData) {
-    localStorage.setItem('board', JSON.stringify(boardData))
+
+
+//scale子组件缩放使用的函数
+function scaleResize(e: PointerEvent) {
+  cursorRender(e)
+  renderOtherCursor(true)//强制渲染
+}
+//弹窗组件
+const popRef = ref()
+import exportToImage from './sectionPop/exportToImage.vue'
+const handleSectionEmit = (key: string) => {
+  switch (key) {
+    case 'export':
+      console.log(11)
+      popRef.value.open(exportToImage, { boardData: boardData! })
+      break
   }
 }
-function get() {
-  return localStorage.getItem('board')
-}
+
 </script>
 
 <style scoped>
@@ -149,5 +234,32 @@ button {
   position: absolute;
   left: 0;
   top: 0;
+}
+
+#drawboard {
+  width: 100vw;
+  height: 100vh;
+  z-index: 1;
+  cursor: none;
+}
+
+#cursorCanvas {
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  z-index: 2;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+#otherCursorCanvas {
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  z-index: 3;
+  left: 0;
+  top: 0;
+  pointer-events: none;
 }
 </style>

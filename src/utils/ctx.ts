@@ -17,11 +17,11 @@ export function setupHighResolutionCanvas(canvas: HTMLCanvasElement) {
   ctx.scale(dpr, dpr)
   return ctx
 }
-export function resizeCanvas(
+export function resizeDrawCanvas(
   canvas: HTMLCanvasElement,
   vw: Ref<number>,
   vh: Ref<number>,
-  board: Board,
+  board: Board | null = null,
   ctx: CanvasRenderingContext2D,
 ) {
   vw.value = window.innerWidth
@@ -38,5 +38,13 @@ export function resizeCanvas(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   // 4. 渲染
-  board.render(ctx, canvas)
+  if (board) board.render(ctx, canvas)
+}
+
+export function resizeCursorCanvas(canvas: HTMLCanvasElement) {
+  const dpr = window.devicePixelRatio || 1
+  canvas.width = window.innerWidth * dpr
+  canvas.height = window.innerHeight * dpr
+  canvas.style.width = `${window.innerWidth}px`
+  canvas.style.height = `${window.innerHeight}px`
 }

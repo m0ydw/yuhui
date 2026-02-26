@@ -45,8 +45,8 @@ const onPointerUp = (e: PointerEvent) => {
 
 <style scoped>
 .handBtn {
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   border-radius: 8px;
   display: flex;
   align-items: center;

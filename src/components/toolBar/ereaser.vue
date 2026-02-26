@@ -36,7 +36,26 @@ const onPointerUp = (e: PointerEvent) => {
 
 <style>
 .toolBar .ereaser {
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+  user-select: none;
+}
+
+.ereaser:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #333;
+}
+
+.ereaser.active {
+  background: #1976d2;
+  color: white;
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.3);
 }
 </style>

@@ -16,5 +16,13 @@ export default defineConfig({
   },
   server: {
     https: {},
+    proxy: {
+      '/api': {
+        target: 'https://localhost:5500', // 后端地址
+        secure: true, // 忽略自签名证书
+        changeOrigin: true, // 修改请求头 origin，避免跨域问题
+        rewrite: (path) => path.replace(/^\/api/, ''), // 去掉 /api 前缀
+      },
+    },
   },
 })

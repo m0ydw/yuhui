@@ -12,14 +12,14 @@
 
 <script setup lang="ts">
 import { type Board } from '@/models';
-import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 interface Props {
   board: Board,
   ctx: CanvasRenderingContext2D,
   canvas: HTMLCanvasElement
 }
 const props = defineProps<Props>()
-
+const emit = defineEmits(['resize']);
 const aim = ref(100 * Number(props.board.getZoom()))
 
 const setAim = (newNumber: number, panx?: number, pany?: number) => {
@@ -74,6 +74,7 @@ const del = (panx?: number, pany?: number) => {
 }
 const reSet = () => {
   setAim(100)
+  props.board.setPan(-props.board.getPanx(), -props.board.getPany(), props.ctx, props.canvas)
 }
 //快捷键缩放控制
 function onWheel(e: WheelEvent) {
@@ -82,6 +83,8 @@ function onWheel(e: WheelEvent) {
   e.preventDefault()              // 2. 屏蔽浏览器缩放
   const dir = Math.sign(e.deltaY) // 3. 方向 -1 上滚，1 下滚
   dir < 0 ? add(e.offsetX, e.offsetY) : del(e.offsetX, e.offsetY)         // 4. 上滚放大，下滚缩小
+  // 消息传递
+  emit('resize')
 }
 //挂载
 onMounted(() => {
@@ -133,6 +136,7 @@ button {
   background-color: #d3f1f1f2;
   border-radius: 5px;
   text-align: center;
+  z-index: 10;
 }
 
 .scaleItem {

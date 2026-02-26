@@ -25,7 +25,8 @@ const main = ref<HTMLDivElement | null>(null)
 const container = { w: 0, h: 0 }
 //清理函数
 let cleanup: (() => void) | null = null
-const clientStore = useClientStore()
+// 延迟获取store实例，避免在Pinia挂载前使用
+let clientStore: ReturnType<typeof useClientStore> | null = null
 const positionStyle = computed(() => ({
   left: `${position.value.x}px`,  // 直接修改 left
   top: `${position.value.y}px`,   // 直接修改 top
@@ -40,6 +41,8 @@ const changePosition = (px: number, py: number) => {
 }
 
 onMounted(() => {
+  // 初始化store
+  clientStore = useClientStore()
   if (move.value && main.value) {
     container.w = main.value.offsetWidth
     container.h = main.value.offsetHeight
@@ -55,11 +58,11 @@ onUnmounted(() => {
 })
 
 function onUndo() {
-  clientStore.getFlow()?.requestUndo()
+  clientStore?.getFlow()?.requestUndo()
 }
 
 function onRedo() {
-  clientStore.getFlow()?.requestRedo()
+  clientStore?.getFlow()?.requestRedo()
 }
 </script>
 
@@ -69,6 +72,7 @@ function onRedo() {
   padding: 5px;
   border: 1px solid silver;
   margin: 3px;
+  z-index: 10;
 }
 
 

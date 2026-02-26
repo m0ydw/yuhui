@@ -63,6 +63,8 @@ export interface Board {
   getLastErasedStrokes: () => Stroke[]
   // 橡皮渲染
   containQueue: (aim: strokeFlow) => void
+  //获取所有strokes
+  getAllStrokes: () => Stroke[]
 }
 //工具类型
 export type toolMode = 'hand' | 'pen' | 'eraser'
@@ -224,4 +226,10 @@ export interface strokeFlow {
   requestRedo: () => void
   handleRestoreStrokes: (strokes: Stroke[]) => void
   resetStroke: () => void
+}
+
+export interface roomState {
+  roomId: string //room索引
+  num: number //总人数
+  roomName: string
 }

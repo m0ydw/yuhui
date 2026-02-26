@@ -305,7 +305,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     },
 
     // 2. 收集橡皮路径上的笔画（鼠标移动时频繁调用）
-    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 1) => {
+    // 橡皮大小设置
+    collectErasingStrokes: (screenPoints: Point[], eraserRadius: number = 10) => {
       // 除去缩放保证相对屏幕大小不变
       eraserRadius /= zoom
       if (screenPoints.length === 0) return
@@ -337,7 +338,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
           const hitRadius2 = hitRadius * hitRadius
 
           const headDist2 = (stroke.head.x - point.x) ** 2 + (stroke.head.y - point.y) ** 2
-          if (headDist2 < hitRadius2 * 2.25) {
+          if (headDist2 < hitRadius2) {
             erasingStrokes.add(stroke)
             continue
           }
@@ -419,6 +420,9 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       if (userQueue === null) {
         userQueue = aim
       }
+    },
+    getAllStrokes() {
+      return [...orderedStrokes]
     },
   }
 }

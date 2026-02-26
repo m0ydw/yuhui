@@ -30,5 +30,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onClick));
   border-radius: 10px;
   box-shadow: 0px 0px 6px 0px black;
   background-color: #fff;
+  z-index: 10;
 }
 </style>
