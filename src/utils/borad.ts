@@ -9,6 +9,10 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   const strokeIndex: Map<string, Stroke> = new Map()
   //空间哈希表
   const gridMap: Map<string, Stroke[]> = new Map()
+  // 虚拟画布（按格子缓存）
+  const tileMap: Map<string, HTMLCanvasElement> = new Map()
+  const tileCtxMap: Map<string, CanvasRenderingContext2D> = new Map()
+  const dirtyTiles: Set<string> = new Set()
   let userQueue: null | strokeFlow = null
   //视窗大小
   //逻辑画布偏移量
@@ -52,9 +56,104 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     //插入全局 数组
     orderedStrokes.push(stroke)
     strokeIndex.set(stroke.id, stroke)
+    // 写入虚拟 tile（只在新增/变更时一次性绘制）
+    renderStrokeToTiles(stroke)
   }
   function _addStrokes(strokes: Stroke[]): void {
     strokes.forEach((stroke) => _addStroke(stroke))
+  }
+
+  function parseGridKey(k: string): { gx: number; gy: number } {
+    const [xs, ys] = k.split(',')
+    return { gx: Number(xs), gy: Number(ys) }
+  }
+
+  function ensureTile(k: string): { tile: HTMLCanvasElement; tileCtx: CanvasRenderingContext2D; gx: number; gy: number } {
+    const existing = tileMap.get(k)
+    const { gx, gy } = parseGridKey(k)
+    if (existing) {
+      return { tile: existing, tileCtx: tileCtxMap.get(k)!, gx, gy }
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = GRID_SIZE
+    canvas.height = GRID_SIZE
+    const tileCtx = canvas.getContext('2d')
+    if (!tileCtx) {
+      throw new Error('无法创建 tile CanvasRenderingContext2D')
+    }
+    tileMap.set(k, canvas)
+    tileCtxMap.set(k, tileCtx)
+    return { tile: canvas, tileCtx, gx, gy }
+  }
+
+  function drawStrokeOnCtx(ctx: CanvasRenderingContext2D, stroke: Stroke) {
+    ctx.save()
+    ctx.globalAlpha = 1
+    ctx.strokeStyle = stroke.color
+    ctx.lineWidth = stroke.width
+    ctx.lineCap = 'round'
+    ctx.lineJoin = 'round'
+    ctx.beginPath()
+    ctx.moveTo(stroke.head.x, stroke.head.y)
+    for (const p of stroke.points) {
+      ctx.lineTo(p.x + stroke.head.x, p.y + stroke.head.y)
+    }
+    ctx.stroke()
+    ctx.restore()
+  }
+
+  function getStrokeCoveredCells(stroke: Stroke): Set<string> {
+    const cells = new Set<string>()
+    const hx = stroke.head.x
+    const hy = stroke.head.y
+    cells.add(key(hx, hy))
+    const pts = stroke.points
+    for (let i = 0; i < pts.length; i++) {
+      const x1 = i === 0 ? hx : pts[i - 1]!.x + hx
+      const y1 = i === 0 ? hy : pts[i - 1]!.y + hy
+      const x2 = pts[i]!.x + hx
+      const y2 = pts[i]!.y + hy
+      addLineCoveredCells(x1, y1, x2, y2, GRID_SIZE, (x, y) => cells.add(key(x, y)))
+    }
+    return cells
+  }
+
+  function renderStrokeToTiles(stroke: Stroke) {
+    const cells = getStrokeCoveredCells(stroke)
+    for (const k of cells) {
+      const { tileCtx, gx, gy } = ensureTile(k)
+      const ox = gx * GRID_SIZE
+      const oy = gy * GRID_SIZE
+      tileCtx.save()
+      tileCtx.translate(-ox, -oy)
+      drawStrokeOnCtx(tileCtx, stroke)
+      tileCtx.restore()
+    }
+  }
+
+  function rebuildTile(k: string) {
+    const cell = gridMap.get(k)
+    if (!cell || cell.length === 0) {
+      // cell 已空，直接清掉对应 tile（释放内存）
+      tileMap.delete(k)
+      tileCtxMap.delete(k)
+      return
+    }
+    const { tileCtx, gx, gy } = ensureTile(k)
+    tileCtx.clearRect(0, 0, GRID_SIZE, GRID_SIZE)
+    const ox = gx * GRID_SIZE
+    const oy = gy * GRID_SIZE
+    // 去重，避免同一 stroke 在 cell 里重复出现时重复绘制
+    const uniq = new Map<string, Stroke>()
+    for (const s of cell) {
+      if (s?.id) uniq.set(s.id, s)
+    }
+    tileCtx.save()
+    tileCtx.translate(-ox, -oy)
+    for (const [, stroke] of uniq) {
+      drawStrokeOnCtx(tileCtx, stroke)
+    }
+    tileCtx.restore()
   }
   //根据视窗收集可见 stroke
   function _strokesInView(): Stroke[] {
@@ -79,14 +178,11 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   }
   //渲染
   function _render(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight)
+    ctx.clearRect(0, 0, vw.value, vh.value)
     ctx.save()
     ctx.translate(panX, panY)
     ctx.scale(zoom, zoom)
 
-    // ────────────────────── 网格线（调试用，可删） ──────────────────────
-    ctx.strokeStyle = '#ddd'
-    ctx.lineWidth = 1 / zoom
     const topLeft = _screenToWorld({ x: 0, y: 0, t: 0 })
     const botRight = _screenToWorld({ x: vw.value, y: vh.value, t: 0 })
     const minGX = Math.floor(topLeft.x / GRID_SIZE)
@@ -94,45 +190,42 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     const minGY = Math.floor(topLeft.y / GRID_SIZE)
     const maxGY = Math.floor(botRight.y / GRID_SIZE)
 
+    // 先把脏 tile 重建掉，避免 drawImage 出现旧内容
+    if (dirtyTiles.size) {
+      for (const k of Array.from(dirtyTiles)) {
+        rebuildTile(k)
+        dirtyTiles.delete(k)
+      }
+    }
+
+    // 将“世界层”按 tile 截图绘制到屏幕（平移/缩放时只做 drawImage）
     for (let gx = minGX; gx <= maxGX; gx++) {
-      const x = gx * GRID_SIZE
-      ctx.beginPath()
-      ctx.moveTo(x, topLeft.y)
-      ctx.lineTo(x, botRight.y)
-      ctx.stroke()
-    }
-    for (let gy = minGY; gy <= maxGY; gy++) {
-      const y = gy * GRID_SIZE
-      ctx.beginPath()
-      ctx.moveTo(topLeft.x, y)
-      ctx.lineTo(botRight.x, y)
-      ctx.stroke()
+      for (let gy = minGY; gy <= maxGY; gy++) {
+        const k = `${gx},${gy}`
+        const tile = tileMap.get(k)
+        if (!tile) continue
+        ctx.drawImage(tile, gx * GRID_SIZE, gy * GRID_SIZE)
+      }
     }
 
-    // ────────────────────── 绘制笔画（无路径合并） ──────────────────────
-    const visibleStrokes = _strokesInView()
-
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
-
-    visibleStrokes.forEach((stroke) => {
-      const isBeingErased = erasingStrokes.has(stroke)
-
-      // 每条笔画独立设置样式 + 绘制，永不共享状态
+    // 橡皮擦预览（只做高亮覆盖，不重画主体）
+    if (erasingStrokes.size) {
       ctx.save()
-      ctx.globalAlpha = isBeingErased ? 0.25 : 1.0
-      ctx.strokeStyle = stroke.color
-      ctx.lineWidth = stroke.width
-
-      ctx.beginPath()
-      ctx.moveTo(stroke.head.x, stroke.head.y)
-      stroke.points.forEach((p) => {
-        ctx.lineTo(p.x + stroke.head.x, p.y + stroke.head.y)
-      })
-      ctx.stroke()
-
-      ctx.restore() // 恢复到绘制前的状态，保证后面的笔画不受影响
-    })
+      ctx.globalAlpha = 0.18
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      for (const stroke of erasingStrokes) {
+        ctx.lineWidth = Math.max(1, stroke.width + 2)
+        ctx.beginPath()
+        ctx.moveTo(stroke.head.x, stroke.head.y)
+        for (const p of stroke.points) {
+          ctx.lineTo(p.x + stroke.head.x, p.y + stroke.head.y)
+        }
+        ctx.stroke()
+      }
+      ctx.restore()
+    }
 
     ctx.restore()
 
@@ -170,6 +263,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   let eraserPathProcessed = 0
   let lastEraserPoint: { x: number; y: number } | null = null
   function _removeStrokeFromGrid(stroke: Stroke) {
+    // 删除前先记录覆盖的 tile，用于脏重建
+    const willDirty = getStrokeCoveredCells(stroke)
     const seen = new Set<string>()
     const headKey = key(stroke.head.x, stroke.head.y)
     if (!seen.has(headKey)) {
@@ -198,6 +293,9 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       orderedStrokes.splice(idx, 1)
     }
     strokeIndex.delete(stroke.id)
+
+    // 标记 tile 脏（下次 render 自动重建）
+    willDirty.forEach((k) => dirtyTiles.add(k))
   }
   function _removeStrokeById(id: string): Stroke | undefined {
     const aim = strokeIndex.get(id)
@@ -238,6 +336,13 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     //向表格中添加笔画
     addStroke: (stroke: Stroke): void => _addStroke(stroke),
     addStrokes: (strokes: Stroke[]): void => _addStrokes(strokes),
+    renderStrokeToWorld: (stroke: Stroke): void => {
+      // 该方法用于“需要重算某条笔画影响的区域”时触发刷新。
+      // 常规 addStroke 已经会直接写入 tile，因此这里选择标记脏并等待下一次 render 重建。
+      const stored = stroke.id ? strokeIndex.get(stroke.id) || stroke : stroke
+      const cells = getStrokeCoveredCells(stored)
+      for (const k of cells) dirtyTiles.add(k)
+    },
     //渲染
     render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void =>
       rafRender(ctx, canvas),
@@ -245,6 +350,16 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
       panX += x
       panY += y
+      rafRender(ctx, canvas)
+    },
+    setPanAbsolute: (
+      nextPanX: number,
+      nextPanY: number,
+      ctx: CanvasRenderingContext2D,
+      canvas: HTMLCanvasElement,
+    ) => {
+      panX = nextPanX
+      panY = nextPanY
       rafRender(ctx, canvas)
     },
     getZoom: (): number => {
@@ -271,12 +386,27 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       panY = cy - worldCY * zoom
       rafRender(ctx, canvas)
     },
+    setZoomAbsolute: (z: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      zoom = z
+      rafRender(ctx, canvas)
+    },
     resize: (width: number, height: number) => {
       vw.value = width
       vh.value = height
     },
     getPanx: () => panX,
     getPany: () => panY,
+    getState: () => ({ panX, panY, zoom }),
+    setState: (
+      state: { panX: number; panY: number; zoom: number },
+      ctx: CanvasRenderingContext2D,
+      canvas: HTMLCanvasElement,
+    ) => {
+      panX = state.panX
+      panY = state.panY
+      zoom = state.zoom
+      rafRender(ctx, canvas)
+    },
     toWorldX: (x: number) => (x - panX) / zoom,
     toWorldY: (y: number) => (y - panY) / zoom,
     initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
@@ -297,6 +427,17 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       return removed
     },
     getStrokeById: (id: string): Stroke | undefined => strokeIndex.get(id),
+    clearAll: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+      orderedStrokes.length = 0
+      strokeIndex.clear()
+      gridMap.clear()
+      erasingStrokes.clear()
+      lastErasedStrokes = []
+      tileMap.clear()
+      tileCtxMap.clear()
+      dirtyTiles.clear()
+      rafRender(ctx, canvas)
+    },
     // 1. 开始橡皮擦（鼠标按下）
     startErasing: () => {
       erasingStrokes.clear()
@@ -469,8 +610,11 @@ export function addStrokeToGrid(
   key: (x: number, y: number) => string,
 ) {
   // 工具：向 gridMap 插入 stroke
+  const seenKeys = new Set<string>()
   const put = (x: number, y: number) => {
     const k = key(x, y)
+    if (seenKeys.has(k)) return
+    seenKeys.add(k)
     if (!gridMap.has(k)) gridMap.set(k, [])
     gridMap.get(k)!.push(stroke)
   }

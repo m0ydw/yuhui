@@ -218,11 +218,33 @@ function scaleResize(e: PointerEvent) {
 //弹窗组件
 const popRef = ref()
 import exportToImage from './sectionPop/exportToImage.vue'
+import saveBoard from './sectionPop/saveBoard.vue'
+import loadBoard from './sectionPop/loadBoard.vue'
+import clearBoard from './sectionPop/clearBoard.vue'
 const handleSectionEmit = (key: string) => {
   switch (key) {
+    case 'save':
+      popRef.value.open(saveBoard, { boardData: boardData! })
+      break
+    case 'load':
+      popRef.value.open(loadBoard, {
+        boardData: boardData!,
+        ctx: ctx.value,
+        canvas: canvas.value,
+        userQueue: userQueue!,
+      })
+      break
     case 'export':
       console.log(11)
       popRef.value.open(exportToImage, { boardData: boardData! })
+      break
+    case 'clear':
+      popRef.value.open(clearBoard, {
+        boardData: boardData!,
+        ctx: ctx.value,
+        canvas: canvas.value,
+        userQueue: userQueue!,
+      })
       break
   }
 }

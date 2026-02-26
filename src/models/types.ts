@@ -27,8 +27,19 @@ export interface Board {
   worldToScreen: (wx: number, wy: number) => Point
   addStroke: (stroke: Stroke) => void
   addStrokes: (strokes: Stroke[]) => void
+  /**
+   * 将“已完成笔画”写入虚拟画布/缓存层（用于后续平移缩放时截图渲染）
+   * 注意：通常在 addStroke 之后调用
+   */
+  renderStrokeToWorld: (stroke: Stroke) => void
   render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
+  setPanAbsolute: (
+    panX: number,
+    panY: number,
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+  ) => void
   setZoom: (
     z: number,
     ctx: CanvasRenderingContext2D,
@@ -36,16 +47,24 @@ export interface Board {
     thisX?: number,
     thisY?: number,
   ) => void
+  setZoomAbsolute: (z: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   getZoom: () => number
   resize: (width: number, height: number) => void
   toWorldX: (x: number) => number
   toWorldY: (y: number) => number
   getPanx: () => number
   getPany: () => number
+  getState: () => { panX: number; panY: number; zoom: number }
+  setState: (
+    state: { panX: number; panY: number; zoom: number },
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+  ) => void
   initBoard: (history: Stroke[], ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   replaceStrokeId: (oldId: string, newId: string) => void
   removeStrokesById: (ids: string[]) => Stroke[]
   getStrokeById: (id: string) => Stroke | undefined
+  clearAll: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   // 新增橡皮擦相关函数（全部加上！）
   /** 开始橡皮擦模式（鼠标按下） */
   startErasing: () => void
@@ -226,6 +245,7 @@ export interface strokeFlow {
   requestRedo: () => void
   handleRestoreStrokes: (strokes: Stroke[]) => void
   resetStroke: () => void
+  clearAll: () => void
 }
 
 export interface roomState {

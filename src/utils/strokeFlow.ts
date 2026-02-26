@@ -470,6 +470,7 @@ export function newStrokeFlow(
           ctx.lineJoin = 'round'
           ctx.lineWidth = st.width
           ctx.strokeStyle = st.color
+          ctx.moveTo(st.head.x, st.head.y)
           for (const pt of st.points) {
             let x = pt.x + st.head.x
             let y = pt.y + st.head.y
@@ -481,6 +482,16 @@ export function newStrokeFlow(
           ctx.restore()
         }
       }
+    },
+    clearAll() {
+      // 仅清理本地队列与撤销栈，不发任何联机消息
+      for (const [, value] of allFlow) {
+        value.strokes.clear()
+      }
+      userActiveStroke.clear()
+      idAlias.clear()
+      localUndoStack.length = 0
+      localRedoStack.length = 0
     },
   }
 }
