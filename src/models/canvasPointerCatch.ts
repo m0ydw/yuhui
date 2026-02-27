@@ -6,7 +6,7 @@ import { hand_Down, hand_Move, hand_Up } from './toolBar/hand'
 import { eraser_Down, eraser_Move, eraser_Up } from './toolBar/eraser'
 import { line_Down, line_Move, line_Up } from './toolBar/line'
 import { rect_Down, rect_Move, rect_Up } from './toolBar/rect'
-import { polyline_Down, polyline_Move, polyline_Finish } from './toolBar/polyline'
+import { polyline_Down, polyline_Move, polyline_IsDrawing, polyline_Cancel } from './toolBar/polyline'
 export function canvasPointer(
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D,
@@ -15,8 +15,54 @@ export function canvasPointer(
 ) {
   let toolData = toolBarData()
   let isDown = false
+
+  // 禁用右键菜单（尤其是折线右键结束时，避免浏览器弹出保存图片等菜单）
+  const preventContextMenu = (e: MouseEvent) => {
+    e.preventDefault()
+  }
+  canvas.addEventListener('contextmenu', preventContextMenu)
+
+  const getCanvasOffset = (e: PointerEvent) => {
+    const rect = canvas.getBoundingClientRect()
+    return {
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    }
+  }
+
+  let polylineTracking = false
+  const polylineHoverMove = (e: PointerEvent) => {
+    // 工具切走后取消折线预览
+    if (toolData.nowTool !== 'polyline') {
+      if (polylineTracking) {
+        polylineTracking = false
+        window.removeEventListener('pointermove', polylineHoverMove)
+        polyline_Cancel()
+      }
+      return
+    }
+    if (!polyline_IsDrawing()) {
+      if (polylineTracking) {
+        polylineTracking = false
+        window.removeEventListener('pointermove', polylineHoverMove)
+      }
+      return
+    }
+    const { offsetX, offsetY } = getCanvasOffset(e)
+    const x = board.toWorldX(offsetX)
+    const y = board.toWorldY(offsetY)
+    polyline_Move(userQueue, board, x, y)
+    board.render(ctx, canvas)
+  }
+
+  const ensurePolylineTracking = () => {
+    if (polylineTracking) return
+    polylineTracking = true
+    window.addEventListener('pointermove', polylineHoverMove)
+  }
+
   const mouseDown = (e: PointerEvent) => {
-    const { offsetX, offsetY } = e
+    const { offsetX, offsetY } = getCanvasOffset(e)
     let x = board.toWorldX(offsetX)
     let y = board.toWorldY(offsetY)
     isDown = true
@@ -42,8 +88,11 @@ export function canvasPointer(
         board.render(ctx, canvas)
         break
       case 'polyline':
+        // 右键结束折线时屏蔽默认菜单
+        e.preventDefault()
         polyline_Down(userQueue, board, x, y, e.button)
         board.render(ctx, canvas)
+        ensurePolylineTracking()
         break
     }
   }
@@ -51,7 +100,7 @@ export function canvasPointer(
     if (!isDown) {
       return
     }
-    const { offsetX, offsetY } = e
+    const { offsetX, offsetY } = getCanvasOffset(e)
     let x = board.toWorldX(offsetX)
     let y = board.toWorldY(offsetY)
     switch (toolData.nowTool) {
@@ -109,8 +158,7 @@ export function canvasPointer(
         board.render(ctx, canvas)
         break
       case 'polyline':
-        // polyline 只在右键时结束，这里统一刷新一下
-        polyline_Finish(userQueue, board)
+        // 折线：左键多次点击追加节点，右键才结束，这里只做一次重绘
         board.render(ctx, canvas)
         break
     }
@@ -123,6 +171,7 @@ export function canvasPointer(
   //返回清理函数
   return () => {
     canvas.removeEventListener('pointerdown', mouseDown)
+    canvas.removeEventListener('contextmenu', preventContextMenu)
     window.removeEventListener('pointermove', mouseMove)
     window.removeEventListener('pointerup', mouseUp)
   }

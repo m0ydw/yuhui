@@ -64,7 +64,7 @@ const del = (panx?: number, pany?: number) => {
   else if (aim.value <= 3000) {
     willchange = aim.value - 100
   }
-  willchange = Math.min(3000, Math.max(1, willchange))
+  willchange = Math.min(3000, Math.max(5, willchange))
   if (panx && pany) {//传中心则使用
     setAim(willchange, panx, pany)
   }

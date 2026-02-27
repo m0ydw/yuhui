@@ -12,6 +12,7 @@ export function rect_Down(userQueue: strokeFlow, board: Board, wx: number, wy: n
   s.points = [{ x: 0, y: 0, t: head.t }]
   s.color = toolStore.getNowColor()
   s.width = toolStore.getPenSize()
+  s.tool = 'rect'
   s.shape = 'rect'
   currentStroke = s
   userQueue.pushStroke(s)
@@ -31,6 +32,7 @@ export function rect_Move(userQueue: strokeFlow, board: Board, wx: number, wy: n
   const p4 = toRelativePoints(currentStroke.head, { x: x1, y: y2, t: Date.now() })
 
   currentStroke.points = [p1, p2, p3, p4]
+  userQueue.updateLocalStrokePreview(currentStroke)
 }
 
 export function rect_Up(userQueue: strokeFlow, board: Board) {

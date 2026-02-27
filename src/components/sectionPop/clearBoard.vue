@@ -1,11 +1,12 @@
 <template>
   <div class="root">
     <div class="title">清空画布</div>
-    <div class="desc">清空后将移除当前画布的所有内容（仅本地操作，不会影响联机）。确定要清空吗？</div>
+    <div class="desc" v-if="online">联机模式下已禁用清空画布（避免与多人同步状态冲突）。</div>
+    <div class="desc" v-else>清空后将移除当前画布的所有内容。确定要清空吗？</div>
 
     <div class="actions">
       <button class="ghost" @click="emit('close')">取消</button>
-      <button class="danger" @click="confirm">清空</button>
+      <button class="danger" :disabled="online" @click="confirm">清空</button>
     </div>
   </div>
 </template>
@@ -18,10 +19,14 @@ const props = defineProps<{
   ctx: CanvasRenderingContext2D
   canvas: HTMLCanvasElement
   userQueue: strokeFlow
+  online?: boolean
 }>()
 const emit = defineEmits<{ close: [] }>()
 
+const online = Boolean(props.online)
+
 function confirm() {
+  if (online) return
   props.userQueue.clearAll()
   props.boardData.clearAll(props.ctx, props.canvas)
   emit('close')
@@ -73,6 +78,11 @@ function confirm() {
   background: #f56c6c;
   color: #fff;
   cursor: pointer;
+}
+
+.danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
 

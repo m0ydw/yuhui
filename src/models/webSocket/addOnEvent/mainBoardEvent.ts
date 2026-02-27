@@ -35,6 +35,11 @@ export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<type
       const aim = data.data
       Flow.pushOtherPoints(aim.points, aim.user, aim.strokeId)
     }),
+    client.on('strokeUpdate', (data) => {
+      const aim = data.data
+      if (!aim?.stroke) return
+      Flow.updateRemoteStroke(aim.user, aim.strokeId, aim.stroke)
+    }),
     client.on('finishStroke', (data) => {
       const aim = data.data
       if (aim.stroke) {

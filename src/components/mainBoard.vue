@@ -244,6 +244,7 @@ const handleSectionEmit = (key: string) => {
         ctx: ctx.value,
         canvas: canvas.value,
         userQueue: userQueue!,
+        online: hasPlayer,
       })
       break
     case 'grid':

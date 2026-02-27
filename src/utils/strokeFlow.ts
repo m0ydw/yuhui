@@ -108,6 +108,7 @@ export function newStrokeFlow(
   const idAlias = new Map<string, string>()
   // 渲染交由 Board.render + resetStroke 统一调度，这里不再维护单独的 RAF 循环
   const isOffline = myId === '0'
+  const MIN_SCREEN_LINE_PX = 1.25
 
   type LocalOperation = { type: 'draw' | 'erase'; strokes: Stroke[] }
   const LOCAL_HISTORY_LIMIT = 50
@@ -247,6 +248,29 @@ export function newStrokeFlow(
     myWebsocketClient.send(sendStrokeFinish(myId, resolvedId, stroke))
   }
 
+  // 图形类工具的“实时预览更新”节流发送（用 strokeUpdate 而不是 strokePoints）
+  let lastUpdateSend = 0
+  const UPDATE_INTERVAL = 16
+  function broadcastStrokeUpdate(stroke: Stroke) {
+    if (myId === '0') return
+    const now = Date.now()
+    if (now - lastUpdateSend < UPDATE_INTERVAL) {
+      return
+    }
+    lastUpdateSend = now
+    const resolvedId = resolveStrokeId(stroke.id)
+    myWebsocketClient.send(
+      JSON.stringify({
+        type: 'strokeUpdate',
+        data: {
+          user: myId,
+          strokeId: resolvedId || stroke.id,
+          stroke,
+        },
+      }),
+    )
+  }
+
   function markActive(userId: string, strokeId: string) {
     userActiveStroke.set(userId, strokeId)
   }
@@ -264,6 +288,23 @@ export function newStrokeFlow(
   }
 
   return {
+    updateLocalStrokePreview(stroke: Stroke) {
+      // 本地已通过引用更新了队列中的 stroke，这里只负责通知联机其他人
+      if (!stroke?.id) return
+      if (myId === '0') return
+      broadcastStrokeUpdate(stroke)
+    },
+    updateRemoteStroke(userId: string, strokeId: string, stroke: Stroke) {
+      const resolvedId = strokeId ? resolveStrokeId(strokeId) : ''
+      const queue = ensureUserFlow(userId)
+      const target = (resolvedId && queue.strokes.getStrokeById(resolvedId)) || queue.strokes.getTeil()
+      if (!target) return
+      Object.assign(target, stroke)
+      // points/head 需要完整替换
+      target.head = clonePoint(stroke.head)
+      target.points = (stroke.points || []).map((p) => clonePoint(p))
+      startRender()
+    },
     pushPoint(pt: Point, id: string = myId) {
       const myQueue = ensureUserFlow(id)
       myQueue.strokes.appendPointToTail(pt)
@@ -424,16 +465,51 @@ export function newStrokeFlow(
           ctx.save()
           ctx.translate(bd.getPanx(), bd.getPany())
           ctx.scale(bd.getZoom(), bd.getZoom())
-          ctx.beginPath()
           ctx.lineCap = 'round'
           ctx.lineJoin = 'round'
-          ctx.lineWidth = st.width
+          ctx.lineWidth = Math.max(st.width, MIN_SCREEN_LINE_PX / Math.max(bd.getZoom(), 1e-6))
           ctx.strokeStyle = st.color
-          ctx.moveTo(st.head.x, st.head.y)
-          for (const pt of st.points) {
-            let x = pt.x + st.head.x
-            let y = pt.y + st.head.y
-            ctx.lineTo(x, y)
+          const shape = st.shape || 'free'
+          const hx = st.head.x
+          const hy = st.head.y
+          const pts = st.points
+
+          ctx.beginPath()
+          switch (shape) {
+            case 'line': {
+              const end = pts[pts.length - 1] || { x: 0, y: 0, t: st.head.t }
+              ctx.moveTo(hx, hy)
+              ctx.lineTo(hx + end.x, hy + end.y)
+              break
+            }
+            case 'rect': {
+              let minX = 0,
+                maxX = 0,
+                minY = 0,
+                maxY = 0
+              for (const p of pts) {
+                minX = Math.min(minX, p.x)
+                maxX = Math.max(maxX, p.x)
+                minY = Math.min(minY, p.y)
+                maxY = Math.max(maxY, p.y)
+              }
+              const x1 = hx + minX
+              const y1 = hy + minY
+              const x2 = hx + maxX
+              const y2 = hy + maxY
+              ctx.moveTo(x1, y1)
+              ctx.lineTo(x2, y1)
+              ctx.lineTo(x2, y2)
+              ctx.lineTo(x1, y2)
+              ctx.closePath()
+              break
+            }
+            default: {
+              ctx.moveTo(hx, hy)
+              for (const pt of pts) {
+                ctx.lineTo(pt.x + hx, pt.y + hy)
+              }
+            }
           }
           st.now = st.points.length - 1
 

@@ -38,8 +38,8 @@
           </label>
 
           <label class="field">
-            <div class="label">时间（可修改）</div>
-            <input class="input" type="datetime-local" v-model="updatedAtInput" />
+            <div class="label">时间</div>
+            <div class="readonly-time">{{ formatTime(displayTime) }}</div>
           </label>
 
           <div class="actions">
@@ -61,17 +61,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Board } from '@/models'
+import type { BoardProjectMeta } from '@/utils/boardProjectStorage'
 import { boardDataToImage, generateProjectId, listBoardProjects, upsertBoardProject, deleteBoardProject } from '@/utils'
 
 const props = defineProps<{ boardData: Board }>()
 const emit = defineEmits<{ close: [] }>()
 
-const projects = ref(listBoardProjects())
+const projects = ref<BoardProjectMeta[]>([])
 const selectedId = ref<'new' | string>('new')
 
 const previewUrl = ref('')
 const name = ref('')
-const updatedAtInput = ref('')
+const displayTime = ref<number>(Date.now())
 const busy = ref(false)
 const message = ref('')
 
@@ -85,30 +86,14 @@ function formatTime(ts: number) {
   }
 }
 
-function toDatetimeLocalValue(ts: number) {
-  const d = new Date(ts)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const yyyy = d.getFullYear()
-  const mm = pad(d.getMonth() + 1)
-  const dd = pad(d.getDate())
-  const hh = pad(d.getHours())
-  const mi = pad(d.getMinutes())
-  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`
-}
-
-function fromDatetimeLocalValue(v: string) {
-  const t = Date.parse(v)
-  return Number.isFinite(t) ? t : Date.now()
-}
-
-function refreshProjects() {
-  projects.value = listBoardProjects()
+async function refreshProjects() {
+  projects.value = await listBoardProjects()
 }
 
 function selectNew() {
   selectedId.value = 'new'
   name.value = `未命名 ${new Date().toLocaleDateString()}`
-  updatedAtInput.value = toDatetimeLocalValue(Date.now())
+  displayTime.value = Date.now()
   message.value = ''
 }
 
@@ -117,7 +102,7 @@ function selectExisting(id: string) {
   if (!meta) return
   selectedId.value = id
   name.value = meta.name
-  updatedAtInput.value = toDatetimeLocalValue(meta.updatedAt || Date.now())
+  displayTime.value = meta.updatedAt || Date.now()
   message.value = ''
 }
 
@@ -139,7 +124,7 @@ async function save() {
   message.value = ''
   try {
     const strokes = props.boardData.getAllStrokes()
-    const now = fromDatetimeLocalValue(updatedAtInput.value)
+    const now = Date.now()
 
     if (selectedId.value === 'new') {
       const id = generateProjectId()
@@ -188,6 +173,7 @@ function remove() {
 }
 
 onMounted(async () => {
+  await refreshProjects()
   selectNew()
   await buildPreview()
 })
@@ -299,6 +285,17 @@ onMounted(async () => {
   font-size: 12px;
   color: #666;
   margin-top: 2px;
+}
+
+.readonly-time {
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  color: #333;
+  background: #f9fafb;
 }
 
 .main {

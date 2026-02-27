@@ -2,6 +2,9 @@
   <div class="toolBar" :style="positionStyle" ref="main">
     <hand></hand>
     <pen></pen>
+    <line-tool></line-tool>
+    <rect-tool></rect-tool>
+    <polyline-tool></polyline-tool>
     <ereaser></ereaser>
     <div class="move" ref="move">
       <moveTool></moveTool>
@@ -16,6 +19,9 @@ import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { toolBarPointer } from '@/models';
 import hand from './toolBar/hand.vue'
 import pen from './toolBar/pen.vue';
+import lineTool from './toolBar/lineTool.vue'
+import rectTool from './toolBar/rectTool.vue'
+import polylineTool from './toolBar/polylineTool.vue'
 import ereaser from './toolBar/ereaser.vue';
 import useClientStore from '@/stores/clientStores';
 import moveTool from './toolBar/moveTool.vue';

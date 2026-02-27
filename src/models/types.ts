@@ -51,6 +51,8 @@ export interface Board {
   ) => void
   setZoomAbsolute: (z: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   getZoom: () => number
+  /** 设置渲染帧间隔（毫秒），例如 1000/60 约等于 60fps */
+  setRenderIntervalMs: (ms: number) => void
   resize: (width: number, height: number) => void
   toWorldX: (x: number) => number
   toWorldY: (y: number) => number
@@ -141,10 +143,9 @@ export class StrokeQueue {
     }
     //
     this.tail++
-    this.items.set(this.tail, {
-      ...stroke,
-      points: stroke.points.map((p) => ({ ...p })), // 深拷贝 points 数组
-    })
+    // 直接引用原始 stroke，保证后续对 stroke 的修改（例如直线/矩形/折线在拖动过程中的点更新）
+    // 能实时体现在预览渲染和最终加入 Board 的数据里
+    this.items.set(this.tail, stroke)
     //如果push的是整个笔画（已经完成）？
   }
   // 向队尾笔画追加点（不创建新笔画）
@@ -251,6 +252,10 @@ export interface strokeFlow {
   handleRestoreStrokes: (strokes: Stroke[]) => void
   resetStroke: () => void
   clearAll: () => void
+  /** 图形类工具（line/rect/polyline）的联机预览同步 */
+  updateLocalStrokePreview: (stroke: Stroke) => void
+  /** 远端图形类工具的预览更新 */
+  updateRemoteStroke: (userId: string, strokeId: string, stroke: Stroke) => void
 }
 
 export interface roomState {

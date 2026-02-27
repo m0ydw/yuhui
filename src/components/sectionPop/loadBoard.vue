@@ -47,6 +47,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import type { Board, strokeFlow } from '@/models'
+import type { BoardProjectMeta } from '@/utils/boardProjectStorage'
 import { getBoardProjectDetail, listBoardProjects, deleteBoardProject } from '@/utils'
 
 const props = defineProps<{
@@ -57,7 +58,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ close: [] }>()
 
-const projects = ref(listBoardProjects())
+const projects = ref<BoardProjectMeta[]>([])
 const selectedId = ref<string>('')
 const busy = ref(false)
 const message = ref('')
@@ -72,8 +73,8 @@ function formatTime(ts: number) {
   }
 }
 
-function refresh() {
-  projects.value = listBoardProjects()
+async function refresh() {
+  projects.value = await listBoardProjects()
   if (projects.value.length && !selectedId.value) {
     selectedId.value = projects.value[0]!.id
   }
@@ -92,7 +93,7 @@ async function load() {
   busy.value = true
   message.value = ''
   try {
-    const detail = getBoardProjectDetail(selectedId.value)
+    const detail = await getBoardProjectDetail(selectedId.value)
     if (!detail) {
       message.value = '读取失败：工程内容不存在'
       return

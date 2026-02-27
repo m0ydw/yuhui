@@ -6,7 +6,7 @@ export function newStroke(
   id: string = '',
   points: Point[] = [],
   color: string = '#000000', //‘’
-  tool: string = '',
+  tool: string = 'pen',
   now: number = -1,
   width: number = 5, //0
   finish: boolean = false,

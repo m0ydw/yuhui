@@ -12,6 +12,7 @@ export function line_Down(userQueue: strokeFlow, board: Board, wx: number, wy: n
   s.points = [{ x: 0, y: 0, t: head.t }]
   s.color = toolStore.getNowColor()
   s.width = toolStore.getPenSize()
+  s.tool = 'line'
   s.shape = 'line'
   currentStroke = s
   userQueue.pushStroke(s)
@@ -29,6 +30,7 @@ export function line_Move(userQueue: strokeFlow, board: Board, wx: number, wy: n
   } else {
     currentStroke.points[1] = p
   }
+  userQueue.updateLocalStrokePreview(currentStroke)
 }
 
 export function line_Up(userQueue: strokeFlow, board: Board) {

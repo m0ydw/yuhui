@@ -13,6 +13,14 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   const tileMap: Map<string, HTMLCanvasElement> = new Map()
   const tileCtxMap: Map<string, CanvasRenderingContext2D> = new Map()
   const dirtyTiles: Set<string> = new Set()
+  // tile 额外留白，避免边界裁剪和接缝
+  const TILE_PAD = 64
+  // 线条最小屏幕像素（用于小 zoom 避免“断断续续”）
+  const MIN_SCREEN_LINE_PX = 1.25
+  // tile 像素缩放系数（= devicePixelRatio * zoom档位）
+  const dpr = window.devicePixelRatio || 1
+  let tileRenderScale = dpr
+  const MAX_ZOOM_TILE_SCALE = 8
   let userQueue: null | strokeFlow = null
   //视窗大小
   //逻辑画布偏移量
@@ -70,24 +78,30 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     return { gx: Number(xs), gy: Number(ys) }
   }
 
-  let tileScale = 1 // 随 zoom 提升时提高 tile 分辨率
-
   function ensureTile(
     k: string,
   ): { tile: HTMLCanvasElement; tileCtx: CanvasRenderingContext2D; gx: number; gy: number } {
-    const existing = tileMap.get(k)
     const { gx, gy } = parseGridKey(k)
+    const existing = tileMap.get(k)
+    const targetPx = Math.ceil((GRID_SIZE + TILE_PAD * 2) * tileRenderScale)
     if (existing) {
-      return { tile: existing, tileCtx: tileCtxMap.get(k)!, gx, gy }
+      // 缩放档位变化后，需要重建 tile 尺寸，否则会出现“新笔画清晰、旧笔画模糊”
+      if (existing.width === targetPx && existing.height === targetPx) {
+        return { tile: existing, tileCtx: tileCtxMap.get(k)!, gx, gy }
+      }
+      tileMap.delete(k)
+      tileCtxMap.delete(k)
+      dirtyTiles.add(k)
     }
     const canvas = document.createElement('canvas')
-    const size = Math.max(GRID_SIZE, Math.floor(GRID_SIZE * tileScale))
-    canvas.width = size
-    canvas.height = size
-    const tileCtx = canvas.getContext('2d')
+    canvas.width = targetPx
+    canvas.height = targetPx
+    const tileCtx = canvas.getContext('2d', { alpha: true })
     if (!tileCtx) {
       throw new Error('无法创建 tile CanvasRenderingContext2D')
     }
+    // 避免 drawImage 缩放时产生接缝感
+    tileCtx.imageSmoothingEnabled = true
     tileMap.set(k, canvas)
     tileCtxMap.set(k, tileCtx)
     return { tile: canvas, tileCtx, gx, gy }
@@ -97,14 +111,63 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     ctx.save()
     ctx.globalAlpha = 1
     ctx.strokeStyle = stroke.color
-    ctx.lineWidth = stroke.width
+    // 保证屏幕上至少有 MIN_SCREEN_LINE_PX 的线宽
+    ctx.lineWidth = Math.max(stroke.width, MIN_SCREEN_LINE_PX / Math.max(zoom, 1e-6))
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
+
+    const shape = stroke.shape || 'free'
+    const pts = stroke.points
+    const hx = stroke.head.x
+    const hy = stroke.head.y
+
     ctx.beginPath()
-    ctx.moveTo(stroke.head.x, stroke.head.y)
-    for (const p of stroke.points) {
-      ctx.lineTo(p.x + stroke.head.x, p.y + stroke.head.y)
+
+    switch (shape) {
+      case 'line': {
+        const end = pts[pts.length - 1] || { x: 0, y: 0, t: stroke.head.t }
+        ctx.moveTo(hx, hy)
+        ctx.lineTo(hx + end.x, hy + end.y)
+        break
+      }
+      case 'rect': {
+        // 从相对点集合计算边界（兼容 points=[p1,p2,p3,p4] 或 points=[diag]）
+        let minX = 0,
+          maxX = 0,
+          minY = 0,
+          maxY = 0
+        for (const p of pts) {
+          minX = Math.min(minX, p.x)
+          maxX = Math.max(maxX, p.x)
+          minY = Math.min(minY, p.y)
+          maxY = Math.max(maxY, p.y)
+        }
+        const x1 = hx + minX
+        const y1 = hy + minY
+        const x2 = hx + maxX
+        const y2 = hy + maxY
+        ctx.moveTo(x1, y1)
+        ctx.lineTo(x2, y1)
+        ctx.lineTo(x2, y2)
+        ctx.lineTo(x1, y2)
+        ctx.closePath()
+        break
+      }
+      case 'polyline': {
+        ctx.moveTo(hx, hy)
+        for (const p of pts) {
+          ctx.lineTo(hx + p.x, hy + p.y)
+        }
+        break
+      }
+      default: {
+        ctx.moveTo(hx, hy)
+        for (const p of pts) {
+          ctx.lineTo(hx + p.x, hy + p.y)
+        }
+      }
     }
+
     ctx.stroke()
     ctx.restore()
   }
@@ -122,17 +185,28 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       const y2 = pts[i]!.y + hy
       addLineCoveredCells(x1, y1, x2, y2, GRID_SIZE, (x, y) => cells.add(key(x, y)))
     }
-    return cells
+    // 为了防止跨格子长线在边界处“被格子截断”，这里对每个格子扩展一圈邻居
+    const expanded = new Set<string>(cells)
+    for (const k of cells) {
+      const { gx, gy } = parseGridKey(k)
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          expanded.add(`${gx + dx},${gy + dy}`)
+        }
+      }
+    }
+    return expanded
   }
 
   function renderStrokeToTiles(stroke: Stroke) {
     const cells = getStrokeCoveredCells(stroke)
     for (const k of cells) {
       const { tileCtx, gx, gy } = ensureTile(k)
-      const ox = gx * GRID_SIZE
-      const oy = gy * GRID_SIZE
       tileCtx.save()
-      tileCtx.translate(-ox, -oy)
+      tileCtx.setTransform(tileRenderScale, 0, 0, tileRenderScale, 0, 0)
+      // tile 的世界起点是 (gx*GRID_SIZE - PAD, gy*GRID_SIZE - PAD)
+      tileCtx.translate(TILE_PAD, TILE_PAD)
+      tileCtx.translate(-gx * GRID_SIZE, -gy * GRID_SIZE)
       drawStrokeOnCtx(tileCtx, stroke)
       tileCtx.restore()
     }
@@ -147,21 +221,31 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       return
     }
     const { tileCtx, gx, gy } = ensureTile(k)
-    const size = Math.max(GRID_SIZE, Math.floor(GRID_SIZE * tileScale))
-    tileCtx.clearRect(0, 0, size, size)
-    const ox = gx * GRID_SIZE
-    const oy = gy * GRID_SIZE
+    // 清屏必须在 identity transform 下进行，否则会清不干净导致“网格线关了仍残留”
+    tileCtx.save()
+    tileCtx.setTransform(1, 0, 0, 1, 0, 0)
+    tileCtx.clearRect(0, 0, tileCtx.canvas.width, tileCtx.canvas.height)
+    tileCtx.restore()
     // 去重，避免同一 stroke 在 cell 里重复出现时重复绘制
     const uniq = new Map<string, Stroke>()
     for (const s of cell) {
       if (s?.id) uniq.set(s.id, s)
     }
     tileCtx.save()
-    tileCtx.translate(-ox, -oy)
+    tileCtx.setTransform(tileRenderScale, 0, 0, tileRenderScale, 0, 0)
+    tileCtx.translate(TILE_PAD, TILE_PAD)
+    tileCtx.translate(-gx * GRID_SIZE, -gy * GRID_SIZE)
     for (const [, stroke] of uniq) {
       drawStrokeOnCtx(tileCtx, stroke)
     }
     tileCtx.restore()
+  }
+
+  // 标记所有 tile 为脏，下次渲染时按当前配置（缩放 / 网格等）重建
+  function markAllTilesDirty() {
+    gridMap.forEach((_, k) => {
+      dirtyTiles.add(k)
+    })
   }
   //根据视窗收集可见 stroke
   function _strokesInView(): Stroke[] {
@@ -186,6 +270,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   }
   //渲染
   function _render(ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void {
+    // 清屏前确保回到基础矩阵（dpr），避免上一次的 transform 影响 clearRect
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
     ctx.clearRect(0, 0, vw.value, vh.value)
     ctx.save()
     ctx.translate(panX, panY)
@@ -198,12 +284,66 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     const minGY = Math.floor(topLeft.y / GRID_SIZE)
     const maxGY = Math.floor(botRight.y / GRID_SIZE)
 
-    // 根据当前缩放动态调整 tile 分辨率（放大时更高清）
-    const targetScale = Math.max(1, Math.min(4, Math.floor(zoom)))
-    if (targetScale !== tileScale) {
-      tileScale = targetScale
-      // 全量标脏，下一帧重建为新的高分辨率
-      gridMap.forEach((_, k) => dirtyTiles.add(k))
+    // 中高倍缩放下直接用矢量重绘当前视窗，保证“正在绘制”和“已完成”清晰度完全一致，避免 tile 重建闪烁
+    // 200% (zoom=2) 以上直接走矢量渲染
+    if (zoom >= 2) {
+      // 网格线（可选）
+      if (showGrid) {
+        ctx.save()
+        ctx.strokeStyle = '#e0e0e0'
+        ctx.lineWidth = 1 / zoom
+        for (let gx = minGX; gx <= maxGX; gx++) {
+          const x = gx * GRID_SIZE
+          ctx.beginPath()
+          ctx.moveTo(x, topLeft.y)
+          ctx.lineTo(x, botRight.y)
+          ctx.stroke()
+        }
+        for (let gy = minGY; gy <= maxGY; gy++) {
+          const y = gy * GRID_SIZE
+          ctx.beginPath()
+          ctx.moveTo(topLeft.x, y)
+          ctx.lineTo(botRight.x, y)
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+      const visible = _strokesInView()
+      for (const stroke of visible) {
+        drawStrokeOnCtx(ctx, stroke)
+      }
+      // 橡皮擦高亮
+      if (erasingStrokes.size) {
+        ctx.save()
+        ctx.globalAlpha = 0.18
+        ctx.strokeStyle = '#ffffff'
+        ctx.lineCap = 'round'
+        ctx.lineJoin = 'round'
+        for (const stroke of erasingStrokes) {
+          ctx.lineWidth = Math.max(1, stroke.width + 2)
+          ctx.beginPath()
+          ctx.moveTo(stroke.head.x, stroke.head.y)
+          for (const p of stroke.points) {
+            ctx.lineTo(p.x + stroke.head.x, p.y + stroke.head.y)
+          }
+          ctx.stroke()
+        }
+        ctx.restore()
+      }
+      ctx.restore()
+      userQueue?.resetStroke()
+      return
+    }
+
+    // 缩放档位变化时，统一重建所有 tile（保持所有笔画同一清晰度，防止“最旧变糊”）
+    const zoomLevel = Math.max(1, Math.min(MAX_ZOOM_TILE_SCALE, Math.ceil(zoom)))
+    const targetTileRenderScale = dpr * zoomLevel
+    if (targetTileRenderScale !== tileRenderScale) {
+      tileRenderScale = targetTileRenderScale
+      tileMap.clear()
+      tileCtxMap.clear()
+      dirtyTiles.clear()
+      markAllTilesDirty()
     }
 
     // 网格线（可选）
@@ -242,7 +382,12 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         const k = `${gx},${gy}`
         const tile = tileMap.get(k)
         if (!tile) continue
-        ctx.drawImage(tile, gx * GRID_SIZE, gy * GRID_SIZE)
+        const s = tileRenderScale
+        const sx = TILE_PAD * s
+        const sy = TILE_PAD * s
+        const sw = GRID_SIZE * s
+        const sh = GRID_SIZE * s
+        ctx.drawImage(tile, sx, sy, sw, sh, gx * GRID_SIZE, gy * GRID_SIZE, GRID_SIZE, GRID_SIZE)
       }
     }
 
@@ -271,6 +416,9 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   }
   let rafId = 0
   let lastCallTime = 0
+  let lastFrameTime = 0
+  // 每帧之间的最小间隔，默认按 60fps 约 16.7ms
+  let minFrameInterval = 1000 / 60
   const rafRender = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
     lastCallTime = performance.now() // 外部调用时间刷新
 
@@ -285,7 +433,11 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         rafId = 0 // 必须重置，这样才能下次重新启动
         return
       }
-      _render(ctx, canvas)
+      // 限制帧率：间隔不足时跳过本帧渲染
+      if (now - lastFrameTime >= minFrameInterval) {
+        lastFrameTime = now
+        _render(ctx, canvas)
+      }
       // 保持 RAF 运行
       rafId = requestAnimationFrame(loop)
     }
@@ -427,6 +579,15 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     setZoomAbsolute: (z: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
       zoom = z
       rafRender(ctx, canvas)
+    },
+    /**
+     * 设置渲染帧率（通过帧间隔控制），例如传入 1000/60 约等于 60fps。
+     * 你可以在外部调用 board.setRenderIntervalMs(ms) 调整。
+     */
+    setRenderIntervalMs: (ms: number) => {
+      const v = Number(ms)
+      if (!Number.isFinite(v) || v <= 0) return
+      minFrameInterval = v
     },
     resize: (width: number, height: number) => {
       vw.value = width
@@ -604,10 +765,19 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       return [...orderedStrokes]
     },
     setShowGrid: (show: boolean) => {
+      if (showGrid === show) return
       showGrid = show
+      // 更改网格配置时强制重建所有虚拟 canvas，避免旧内容残留
+      tileMap.clear()
+      tileCtxMap.clear()
+      markAllTilesDirty()
     },
     toggleGrid: () => {
       showGrid = !showGrid
+      // 网格开关切换时，同样重置虚拟 canvas
+      tileMap.clear()
+      tileCtxMap.clear()
+      markAllTilesDirty()
     },
     getShowGrid: () => showGrid,
   }
