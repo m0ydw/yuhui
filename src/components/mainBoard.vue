@@ -72,7 +72,8 @@ onMounted(async () => {
   const roomId = route.query.roomId
   if (roomId) {
     //先进入多人
-    changeUserId(await myWebsocketClient.connect())
+    myWebsocketClient.disconnect()
+    changeUserId(await myWebsocketClient.connect('draw'))
     //尝试加入对应room
     myWebsocketClient.send(sendIAmJoin(roomId.toString(), getUserId()))
     //等待服务器响应

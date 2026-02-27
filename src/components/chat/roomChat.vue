@@ -118,7 +118,7 @@ function close() {
 async function ensureWs() {
   // 保证 WebSocket 已连接
   if (!myWebsocketClient.ws || myWebsocketClient.ws.readyState !== WebSocket.OPEN) {
-    await myWebsocketClient.connect()
+    await myWebsocketClient.connect('draw')
   }
 }
 

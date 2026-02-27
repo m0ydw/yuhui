@@ -44,7 +44,7 @@ export class WebSocketClient {
     this.specialHandlers.set(type, handler)
   }
 
-  async connect(): Promise<string> {
+  async connect(connType: 'draw' | 'allRoom' = 'draw'): Promise<string> {
     if (this.ws?.readyState === WebSocket.OPEN) {
       const userId = this.userId || 'unknown' // 明确为 string 类型
       return Promise.resolve(userId)
@@ -63,7 +63,11 @@ export class WebSocketClient {
     //先获取ticket
     const data = await request<ticket>('api/auth/ticket', 'POST', {}, true)
     console.log('ticket', data)
-    this.ws = new WebSocket(`${this.url}?ticket=${data.data.ticket}`)
+    const params = new URLSearchParams({
+      ticket: data.data.ticket,
+      type: connType,
+    })
+    this.ws = new WebSocket(`${this.url}?${params.toString()}`)
     this.ws.onopen = () => console.log('WebSocket 已连接')
     this.ws.onclose = () => console.log('WebSocket 已断开')
     this.ws.onerror = (error) => console.error('WebSocket 错误:', error)

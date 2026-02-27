@@ -31,7 +31,8 @@ import { ref, onMounted } from 'vue';
 const roomMap = createAllRoomMap()
 
 onMounted(async () => {
-  changeUserId(await myWebsocketClient.connect())
+  myWebsocketClient.disconnect()
+  changeUserId(await myWebsocketClient.connect('allRoom'))
   //发送初始化请求
   myWebsocketClient.send(sendGetAllRoom())
   //接收等待
