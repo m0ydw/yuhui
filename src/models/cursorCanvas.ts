@@ -34,6 +34,9 @@ export function cursorRender(e: PointerEvent | null = null) {
       renderEraser(ctx, x, y, zoom)
       break
     case 'pen':
+    case 'line':
+    case 'rect':
+    case 'polyline':
       renderPen(ctx, x, y)
       break
     case 'hand':

@@ -8,7 +8,7 @@
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
     <boardSection @select="handleSectionEmit"></boardSection>
     <!-- 弹窗 -->
-    <flexPop ref="popRef"></flexPop>
+
   </div>
 </template>
 
@@ -55,6 +55,8 @@ let otherCursors: any = []
 // router.push('/draw')
 // 进入多人模式，指定房间
 // router.push('')
+
+//画板
 const canvas = shallowRef()
 const ctx = shallowRef()
 const windowVw = ref()
@@ -97,6 +99,7 @@ onMounted(async () => {
   } else {
     //单人
   }
+  //
   canvas.value = document.getElementById('drawboard')
   //核心逻辑
   if (canvas.value) {
@@ -222,7 +225,10 @@ import exportToImage from './sectionPop/exportToImage.vue'
 import saveBoard from './sectionPop/saveBoard.vue'
 import loadBoard from './sectionPop/loadBoard.vue'
 import clearBoard from './sectionPop/clearBoard.vue'
+import { getPopFlex } from '@/models/flexpop/flexpop'
 const handleSectionEmit = (key: string) => {
+  let popRef = getPopFlex()
+  if (popRef === null) return
   switch (key) {
     case 'save':
       popRef.value.open(saveBoard, { boardData: boardData! })

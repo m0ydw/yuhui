@@ -57,8 +57,8 @@ export async function request<T>(
   // if (result.code !== 200) {
   //   throw new Error(result.message || '业务错误')
   // }
-  //401代表token过期
-  if (result.code === 401 && !retry) {
+  //999代表token过期
+  if (result.code === 999 && !retry) {
     await refresh()
     return request(url.replace(SERVER, ''), method, params, true, true)
   }

@@ -1,12 +1,20 @@
 <template>
   <router-view />
   <message></message>
+  <flexPop ref="popRef"></flexPop>
   <button @click="refresh"></button>
 </template>
 
 <script setup lang="ts">
-import message from './components/messageNotice/message.vue';
 import { refresh } from './api/token';
+import { onMounted, ref } from 'vue';
+import flexPop from './components/flexPop.vue';
+import message from './components/messageNotice/message.vue';
+import { initPopFlex } from './models/flexpop/flexpop';
+const popRef = ref()
+onMounted(() => {
+  initPopFlex(popRef.value)
+})
 </script>
 
 <style>

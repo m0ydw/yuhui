@@ -62,6 +62,9 @@ export class WebSocketClient {
 
     //先获取ticket
     const data = await request<ticket>('api/auth/ticket', 'POST', {}, true)
+    //失败
+    if (data.code !== 200) {
+    }
     console.log('ticket', data)
     const params = new URLSearchParams({
       ticket: data.data.ticket,
@@ -69,7 +72,7 @@ export class WebSocketClient {
     })
     this.ws = new WebSocket(`${this.url}?${params.toString()}`)
     this.ws.onopen = () => console.log('WebSocket 已连接')
-    this.ws.onclose = () => console.log('WebSocket 已断开')
+    this.ws.onclose = (event) => console.log(event.code, event.reason)
     this.ws.onerror = (error) => console.error('WebSocket 错误:', error)
     this.ws.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data)

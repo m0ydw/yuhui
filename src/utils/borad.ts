@@ -16,7 +16,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   // tile 额外留白，避免边界裁剪和接缝
   const TILE_PAD = 64
   // 线条最小屏幕像素（用于小 zoom 避免“断断续续”）
-  const MIN_SCREEN_LINE_PX = 1.25
+  const MIN_SCREEN_LINE_PX = 2
   // tile 像素缩放系数（= devicePixelRatio * zoom档位）
   const dpr = window.devicePixelRatio || 1
   let tileRenderScale = dpr
@@ -78,9 +78,12 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     return { gx: Number(xs), gy: Number(ys) }
   }
 
-  function ensureTile(
-    k: string,
-  ): { tile: HTMLCanvasElement; tileCtx: CanvasRenderingContext2D; gx: number; gy: number } {
+  function ensureTile(k: string): {
+    tile: HTMLCanvasElement
+    tileCtx: CanvasRenderingContext2D
+    gx: number
+    gy: number
+  } {
     const { gx, gy } = parseGridKey(k)
     const existing = tileMap.get(k)
     const targetPx = Math.ceil((GRID_SIZE + TILE_PAD * 2) * tileRenderScale)
@@ -315,12 +318,12 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
       // 橡皮擦高亮
       if (erasingStrokes.size) {
         ctx.save()
-        ctx.globalAlpha = 0.18
+        ctx.globalAlpha = 0
         ctx.strokeStyle = '#ffffff'
         ctx.lineCap = 'round'
         ctx.lineJoin = 'round'
         for (const stroke of erasingStrokes) {
-          ctx.lineWidth = Math.max(1, stroke.width + 2)
+          ctx.lineWidth = Math.max(MIN_SCREEN_LINE_PX, stroke.width)
           ctx.beginPath()
           ctx.moveTo(stroke.head.x, stroke.head.y)
           for (const p of stroke.points) {
@@ -394,7 +397,7 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     // 橡皮擦预览（只做高亮覆盖，不重画主体）
     if (erasingStrokes.size) {
       ctx.save()
-      ctx.globalAlpha = 0.18
+      ctx.globalAlpha = 0.9
       ctx.strokeStyle = '#ffffff'
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'

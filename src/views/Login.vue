@@ -210,7 +210,7 @@ const passwordReg = /^[a-zA-Z0-9!@#$%^&*()_+\-=\[\]{}|;:,.<>?]{8,45}$/;
 
 // 3. 邮箱：最长80个字符（在原有基础上增加长度限制）
 const emailReg = /^(?=.{1,80}$)[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
-//获取token
+//登录获取token
 async function handleLogin() {
   if (loginButton.value === true) return
   loginButton.value = true
@@ -235,6 +235,8 @@ async function handleLogin() {
     setToken(response.data.accessToken)
     //标记
     localStorage.setItem('hasRefresh', 'true')
+    router.push({ name: 'allRoom' })
+    addBaseMessager('登录成功')
   }
 }
 //确认注册     发送 验证码
