@@ -8,18 +8,14 @@
 
       <div class="chat-body" ref="listRef" @scroll="onScroll">
         <div class="spacer" :style="{ height: topPadding + 'px' }"></div>
-
-        <div
-          v-for="msg in visibleMessages"
-          :key="msg.id"
-          class="chat-item"
-          @mouseenter="hoverMsgId = msg.id"
-          @mouseleave="hoverMsgId = ''"
-        >
+        <!-- 可视 -->
+        <div v-for="msg in visibleMessages" :key="msg.id" class="chat-item" :class="{ 'is-me': isme(msg.userId) }"
+          @mouseenter="hoverMsgId = msg.id" @mouseleave="hoverMsgId = ''">
+          <!-- 头像 -->
           <div class="avatar"></div>
           <div class="content">
             <div class="meta">
-              <span class="user">{{ msg.userId }}</span>
+              <span class="user">{{ msg.name }}</span>
               <span class="time" v-if="hoverMsgId === msg.id">
                 {{ formatTime(msg.createdAt) }}
               </span>
@@ -35,13 +31,8 @@
       </div>
 
       <footer class="chat-footer">
-        <textarea
-          class="chat-input"
-          v-model="draft"
-          maxlength="100"
-          placeholder="最多 100 字，回车发送"
-          @keydown.enter.prevent="send"
-        ></textarea>
+        <textarea class="chat-input" v-model="draft" maxlength="100" placeholder="最大100 字"
+          @keydown.enter.prevent="send"></textarea>
         <button class="chat-send" :disabled="!canSend" @click="send">发送</button>
       </footer>
     </div>
@@ -50,20 +41,21 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { myWebsocketClient } from '@/models/webSocket/cilentExample'
-
+import { getUserId, myWebsocketClient } from '@/models/webSocket/cilentExample'
+//单个消息的信息
 interface ChatMessage {
   id: string
   userId: string
   text: string
   createdAt: number
+  name: string
 }
 
 const props = defineProps<{
   roomId: string
   modelValue: boolean
 }>()
-
+//传递事件  关闭组件
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
@@ -72,29 +64,36 @@ const visible = computed(() => props.modelValue)
 const messages = ref<ChatMessage[]>([])
 const hasMore = ref(true)
 const cursor = ref<number | null>(null)
-const loading = ref(false)
+const loading = ref(false)     //防止重复加载
 const draft = ref('')
 const hoverMsgId = ref('')
 const hovering = ref(false)
+const isme = (id: string) => id === getUserId()  //是否是自己发的消息
 
 // 虚拟列表
-const ITEM_HEIGHT = 44
+const ITEM_HEIGHT = 44     //单位高度
 const OVERSCAN = 6
 const listRef = ref<HTMLDivElement | null>(null)
 const scrollTop = ref(0)
-
+//总高度
 const totalHeight = computed(() => messages.value.length * ITEM_HEIGHT)
+//(可视)开始的序号
 const startIndex = computed(() => Math.max(0, Math.floor(scrollTop.value / ITEM_HEIGHT) - OVERSCAN))
+//结束的序号
 const endIndex = computed(() =>
   Math.min(messages.value.length, Math.floor((scrollTop.value + viewportHeight.value) / ITEM_HEIGHT) + OVERSCAN),
 )
+//可视的消息数组
 const visibleMessages = computed(() => messages.value.slice(startIndex.value, endIndex.value))
+//顶部消息长度占位高度
 const topPadding = computed(() => startIndex.value * ITEM_HEIGHT)
+//底部消息长度占位高度
 const bottomPadding = computed(() => totalHeight.value - topPadding.value - visibleMessages.value.length * ITEM_HEIGHT)
+//可视部分高度
 const viewportHeight = computed(() => (listRef.value ? listRef.value.clientHeight : 0))
-
+//消息发送的判断
 const canSend = computed(() => draft.value.trim().length > 0 && draft.value.length <= 100)
-
+//根据时间戳返回时间
 function formatTime(ts: number) {
   try {
     return new Date(ts).toLocaleString()
@@ -102,7 +101,7 @@ function formatTime(ts: number) {
     return String(ts)
   }
 }
-
+//滚动事件，更新 scrollTop，并在接近顶部时加载更多
 function onScroll() {
   if (!listRef.value) return
   scrollTop.value = listRef.value.scrollTop
@@ -121,18 +120,22 @@ async function ensureWs() {
     await myWebsocketClient.connect('draw')
   }
 }
-
+//历史消息处理函数
 function handleChatHistory(raw: any) {
   const data = raw.data
   if (!data || data.roomId !== props.roomId) return
+  //是数组
   const items: ChatMessage[] = Array.isArray(data.items) ? data.items : []
+  //新消息在前，旧消息在后
   const prevLength = messages.value.length
   if (prevLength === 0) {
     messages.value = items
   } else {
     messages.value = [...items, ...messages.value]
   }
+  //是否有更多
   hasMore.value = Boolean(data.hasMore)
+  //更新 cursor（用来定位历史消息）
   cursor.value = data.cursor ?? null
   loading.value = false
 }
@@ -163,7 +166,7 @@ async function joinChat() {
     }),
   )
 }
-
+//加载更多
 function loadMore() {
   if (!props.roomId || !hasMore.value || loading.value) return
   loading.value = true
@@ -178,7 +181,7 @@ function loadMore() {
     }),
   )
 }
-
+//发送消息
 function send() {
   if (!canSend.value || !props.roomId) return
   const text = draft.value.trim().slice(0, 100)
@@ -197,8 +200,8 @@ function send() {
 
 onMounted(() => {
   // 监听聊天消息
-  myWebsocketClient.on('chatHistory', handleChatHistory)
-  myWebsocketClient.on('chatMessage', handleChatMessage)
+  myWebsocketClient.on('chatHistory', handleChatHistory)   //历史消息
+  myWebsocketClient.on('chatMessage', handleChatMessage)    //新消息
 })
 
 onBeforeUnmount(() => {
@@ -280,6 +283,23 @@ watch(
   gap: 8px;
 }
 
+.chat-item.is-me {
+  flex-direction: row-reverse;
+  /* 头像跑到右边 */
+  text-align: right;
+  /* 文字右对齐 */
+}
+
+.is-me .content {
+  align-items: flex-end;
+  /* 内容右对齐 */
+}
+
+.is-me .meta {
+  flex-direction: row-reverse;
+  /* 名字和时间顺序也反一下*/
+}
+
 .avatar {
   width: 32px;
   height: 32px;
@@ -358,4 +378,3 @@ watch(
   cursor: not-allowed;
 }
 </style>
-

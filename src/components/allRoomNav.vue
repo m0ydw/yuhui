@@ -37,7 +37,8 @@ import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { request, type createRoom } from '@/api';
 import { getToken } from '@/api';
-
+import { getPopFlex } from '@/models/flexpop/flexpop';
+import createRoomSection from '@/components/sectionPop/createRoomSection.vue';
 const router = useRouter()
 const inputRoomId = ref('');
 
@@ -57,9 +58,12 @@ const handleOffline = () => {
 
 // 新建
 const handleCreateRoom = async () => {
-  const data = await request<createRoom>('api/createCanvas', 'GET', {}, true)
-  console.log(getToken())
-  console.log(data)
+  // const data = await request<createRoom>('api/createCanvas', 'GET', {}, true)
+  // console.log(getToken())
+  // console.log(data)
+  const pop = getPopFlex()
+  if (!pop) return
+  pop.value.open(createRoomSection, {})
 };
 
 // 登出
@@ -83,7 +87,6 @@ const handleLogout = () => {
   box-sizing: border-box;
   position: sticky;
   top: 0;
-  z-index: 100;
   margin-bottom: 20px;
 }
 

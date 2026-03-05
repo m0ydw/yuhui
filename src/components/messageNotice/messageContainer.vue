@@ -1,7 +1,7 @@
 <template>
   <div class="container" :class="props.type">
-    <messageItem v-for="[key, item] in messageMap" :text="item.text" :type="props.type" :key="key" :id="key"
-      @tryClose="close">
+    <messageItem v-for="[key, item] in messageMap" :text="item.text" :userText="item.userText" :type="props.type"
+      :key="key" :id="key" @tryClose="close">
     </messageItem>
   </div>
 </template>
@@ -14,7 +14,7 @@ interface Prop {
 }
 const props = defineProps<Prop>()
 
-const messageMap = shallowReactive(new Map<string, { text: string }>)//方便扩展
+const messageMap = shallowReactive(new Map<string, { text: string, userText: string }>)//方便扩展
 
 const close = (key: string) => {
   if (messageMap.has(key)) {
@@ -22,16 +22,10 @@ const close = (key: string) => {
   }
 }
 let id = 0
-const addMessage = (text: string) => {
+const addMessage = (text: string, userText: string = 'isnotUser') => {
   const key = `${++id}`
-
   //添加
-  messageMap.set(key, { text })
-
-  //设置延时删除
-  setTimeout(() => {
-    close(key)
-  }, 3000)
+  messageMap.set(key, { text, userText })
 }
 
 //暴露函数
@@ -43,10 +37,10 @@ defineExpose({
 <style scoped>
 .container {
   position: absolute;
-  background-color: aqua;
   width: 350px;
   height: 100px;
-  z-index: -9999;
+  pointer-events: none;
+  z-index: 1000000;
 }
 
 .baseNotice {

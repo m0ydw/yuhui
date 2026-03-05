@@ -1,8 +1,9 @@
 <template>
+
   <router-view />
-  <message></message>
   <flexPop ref="popRef"></flexPop>
   <button @click="refresh"></button>
+  <message></message>
 </template>
 
 <script setup lang="ts">

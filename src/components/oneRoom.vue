@@ -1,5 +1,5 @@
 <template>
-  <div class="oneRoom">
+  <div class="oneRoom" :class="{ myRoom: props.roomData.homeowner === getUserId() }">
     <div class="room-info">
       <div class="room-name" :title="props.roomData.roomName">
         {{ props.roomData.roomName }}
@@ -15,14 +15,16 @@
       </div>
     </div>
 
-    <button class="enter" @click="enter">进入</button>
+    <button :disabled="entring" class="enter" :class="{ 'enter-disabled': entring }" @click="enter">进入</button>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { type roomState } from '@/models';
-
+import { getUserId, type roomState } from '@/models';
+import { request } from '@/api';
+import { addBaseMessager } from '@/models';
 const router = useRouter()
 
 interface Prop {
@@ -30,10 +32,25 @@ interface Prop {
 }
 
 const props = defineProps<Prop>()
-
-function enter() {
+const entring = ref(false)
+async function enter() {
+  entring.value = true
+  //尝试请求加入
+  const canJoin = await request<{}>('api/tryJoinRoom', 'POST', { roomId: props.roomData.roomId }, true)
+  console.log(canJoin)
+  if (canJoin.code !== 200) {
+    addBaseMessager(canJoin.message)
+    entring.value = false
+    return
+  }
   router.replace({ name: 'draw', query: { roomId: `${props.roomData.roomId}` } })
+
+  entring.value = false
 }
+
+// (() => {
+//   console.log(getUserId(), props.roomData)
+// })()
 </script>
 
 <style scoped>
@@ -53,10 +70,18 @@ function enter() {
   margin: 10px;
 }
 
+.myRoom {
+  border-color: #3a8ee6;
+}
+
 .oneRoom:hover {
   transform: translateY(-3px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
   border-color: #dcdcdc;
+}
+
+.myRoom:hover {
+  border-color: #3a8ee6;
 }
 
 .room-name {
@@ -129,5 +154,21 @@ function enter() {
 .num-pop-leave-to {
   opacity: 0;
   transform: translateY(-10px);
+}
+
+/* 禁用状态样式 */
+.enter-disabled,
+.enter-disabled:hover,
+.enter-disabled:active {
+  background-color: #a0cfff;
+  /* 浅色 */
+  cursor: not-allowed;
+  /* 禁止手势 */
+  opacity: 0.6;
+  /* 半透明 */
+  transform: none;
+  /* 取消点击缩放 */
+  box-shadow: none;
+  /* 取消阴影 */
 }
 </style>

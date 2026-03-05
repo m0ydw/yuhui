@@ -11,8 +11,8 @@ export async function request<T>(
   url: string,
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   params: any = {}, // 请求参数
-  needToken: boolean,
-  retry = false, //二次尝试参数
+  needToken: boolean, //需要accesstoken吗
+  retry = false, //二次尝试参数不需要传
 ): Promise<ApiResponse<T>> {
   url = `${SERVER}${url}`
 
@@ -27,7 +27,7 @@ export async function request<T>(
   // 设置默认请求头
   const headers: Record<string, string> = {}
 
-  // 如果是 POST/PUT，需要设置 Content-Type
+  // 如果是 POST/PUT(有参数)，需要设置 Content-Type
   if (method === 'POST' || method === 'PUT') {
     headers['Content-Type'] = 'application/json'
   }
@@ -51,7 +51,6 @@ export async function request<T>(
 
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
 
-  //401token失效：刷新并重试
   const result: ApiResponse<T> = await response.json()
 
   // if (result.code !== 200) {

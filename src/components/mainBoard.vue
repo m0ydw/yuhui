@@ -107,8 +107,8 @@ onMounted(async () => {
     windowVh.value = window.innerHeight
     //设置高分辨率ctx
     ctx.value = setupHighResolutionCanvas(canvas.value)
-    //board实例
-    boardData = newBoard(1024, windowVw, windowVh)
+    //board实例（增大网格尺寸，减少 tile 边界与重建次数）
+    boardData = newBoard(2048, windowVw, windowVh)
     boardReady.value = true
     //初始化store
     clientStore = useClientStore()
@@ -220,7 +220,6 @@ function scaleResize(e: PointerEvent) {
   renderOtherCursor(true)//强制渲染
 }
 //弹窗组件
-const popRef = ref()
 import exportToImage from './sectionPop/exportToImage.vue'
 import saveBoard from './sectionPop/saveBoard.vue'
 import loadBoard from './sectionPop/loadBoard.vue'

@@ -136,7 +136,7 @@ button {
   background-color: #d3f1f1f2;
   border-radius: 5px;
   text-align: center;
-  z-index: 10;
+  /* z-index: 10; */
 }
 
 .scaleItem {

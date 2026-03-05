@@ -24,3 +24,7 @@ export interface logFinalData {
 export interface ticket {
   ticket: string
 }
+export interface roomIdData {
+  roomId: string
+}
+export interface createRoomData {}

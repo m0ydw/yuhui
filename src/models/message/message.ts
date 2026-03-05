@@ -16,8 +16,8 @@ export function addBaseMessager(text: string) {
     baseMessage.value.addMessage(text)
   }
 }
-export function addUserMessager(text: string) {
+export function addUserMessager(text: string, userText: string) {
   if (userMessage.value) {
-    userMessage.value.addMessage(text)
+    userMessage.value.addMessage(text, userText)
   }
 }

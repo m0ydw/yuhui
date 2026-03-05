@@ -2,11 +2,13 @@
 //并处理
 import { WebSocketClient } from '../clientType'
 import { newStrokeFlow } from '@/utils'
+import { addUserMessager } from '@/models/message/message'
 export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<typeof newStrokeFlow>) {
   //进入房间
   ;(client.on('whoJoins', (data) => {
     const aim = data.data
     Flow.newUser(aim.user)
+    addUserMessager(aim.name, '进入了房间')
   }),
     client.on('startStroke', (data) => {
       const aim = data.data
@@ -59,9 +61,11 @@ export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<type
       const aim = data.data
       Flow.handleRestoreStrokes(aim.strokes || [])
     }),
+    //离开房间
     client.on('whoExit', (data) => {
       const aim = data.data
       Flow.delUser(aim.user)
+      addUserMessager(aim.name, '离开了房间')
     }))
   //退出
 }

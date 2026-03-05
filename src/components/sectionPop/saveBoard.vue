@@ -16,7 +16,7 @@
 
           <div v-for="p in projects" :key="p.id" class="row" :class="{ active: selectedId === p.id }"
             @click="selectExisting(p.id)">
-            <img v-if="p.previewDataUrl" class="thumb" :src="p.previewDataUrl" alt="preview" />
+            <img v-if="p.previewDataUrl" class="thumb" :src="p.previewDataUrl" alt="图片" />
             <div class="rowText">
               <div class="rowTitle">{{ p.name }}</div>
               <div class="rowSub">{{ formatTime(p.updatedAt) }} · {{ p.strokeCount }} 笔</div>
@@ -390,4 +390,3 @@ onMounted(async () => {
   color: #2e7d32;
 }
 </style>
-

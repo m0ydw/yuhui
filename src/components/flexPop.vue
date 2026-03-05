@@ -10,7 +10,7 @@
 
 <script setup>
 import { reactive, markRaw } from 'vue'
-
+let couldClose = true
 const state = reactive({
   visible: false,
   content: null,
@@ -18,14 +18,17 @@ const state = reactive({
 })
 
 // 核心：暴露 open 方法
-const open = (component, props = {}) => {
+const open = (component, props = {}, canClose = true) => {
   state.content = markRaw(component)  // 标记为非响应式，优化性能
   state.props = props
   state.visible = true
+  couldClose = canClose
 }
 
 const close = () => {
-  state.visible = false
+  if (couldClose) {//能关闭则关闭否则无法关闭
+    state.visible = false
+  }
 }
 
 defineExpose({ open, close })

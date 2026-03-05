@@ -262,4 +262,6 @@ export interface roomState {
   roomId: string //room索引
   num: number //总人数
   roomName: string
+  userkey: string
+  homeowner: string
 }

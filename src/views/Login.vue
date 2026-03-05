@@ -216,8 +216,6 @@ async function handleLogin() {
   loginButton.value = true
   console.log('登录数据', loginForm)
 
-  // TODO: 在这里接你的登录接口
-  // await api.login(loginForm)
 
   let params = {
     email: loginForm.email,
@@ -229,14 +227,20 @@ async function handleLogin() {
     return
   }
   const response = await request<loginData>('api/auth/login', 'POST', params, false)
-  //登陆成功
+
   console.log(response)
-  if (response.code === 400) {
+  //登陆成功
+  if (response.code === 200) {
     setToken(response.data.accessToken)
     //标记
     localStorage.setItem('hasRefresh', 'true')
+    setTimeout(() => {
+      addBaseMessager('登录成功')
+    }, 10);
     router.push({ name: 'allRoom' })
-    addBaseMessager('登录成功')
+  } else {
+    addBaseMessager(response.data.status)
+    loginButton.value = false
   }
 }
 //确认注册     发送 验证码

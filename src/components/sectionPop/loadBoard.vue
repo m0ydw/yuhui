@@ -11,7 +11,7 @@
         <div class="list">
           <div v-for="p in projects" :key="p.id" class="row" :class="{ active: selectedId === p.id }"
             @click="select(p.id)">
-            <img v-if="p.previewDataUrl" class="thumb" :src="p.previewDataUrl" alt="preview" />
+            <img v-if="p.previewDataUrl" class="thumb" :src="p.previewDataUrl" alt="图片" />
             <div class="rowText">
               <div class="rowTitle">{{ p.name }}</div>
               <div class="rowSub">{{ formatTime(p.updatedAt) }} · {{ p.strokeCount }} 笔</div>
@@ -75,9 +75,11 @@ function formatTime(ts: number) {
 
 async function refresh() {
   projects.value = await listBoardProjects()
+  //默认选中第一个
   if (projects.value.length && !selectedId.value) {
     selectedId.value = projects.value[0]!.id
   }
+  //如果当前选中的工程已被删除，则选中第一个
   if (selectedId.value && !projects.value.some((p) => p.id === selectedId.value)) {
     selectedId.value = projects.value[0]?.id || ''
   }
@@ -314,4 +316,3 @@ onMounted(() => {
   color: #2e7d32;
 }
 </style>
-
