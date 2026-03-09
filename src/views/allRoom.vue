@@ -30,6 +30,8 @@ import { ref, onMounted } from 'vue';
 
 const roomMap = createAllRoomMap()
 
+
+import { request, type logFinalData } from '@/api';
 onMounted(async () => {
   myWebsocketClient.disconnect()
   changeUserId(await myWebsocketClient.connect('allRoom'))
@@ -41,6 +43,11 @@ onMounted(async () => {
   roomMap.roomInIt(Res.data)
   //监听
   addAllRoomEvent(roomMap)
+
+  //获取用户的名称和
+  const res = await request<logFinalData>('api/auth/tokenLogin', 'GET', {}, false)
+  console.log(res)
+  localStorage.setItem('User_Data', JSON.stringify(res.data))
 })
 </script>
 
@@ -60,6 +67,7 @@ onMounted(async () => {
      这里最好相对定位，确保它出现时占据空间
   */
   position: relative;
+  pointer-events: none;
 }
 
 .empty-icon {

@@ -26,4 +26,14 @@ body,
   padding: 0;
   height: 100%;
 }
+
+* {
+  user-select: none;
+}
+
+/* 输入框/文本域 允许选中（不影响正常输入） */
+input,
+textarea {
+  user-select: auto;
+}
 </style>

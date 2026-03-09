@@ -1,6 +1,7 @@
 export const SERVER: string = `https://localhost:5500/`
 export const WSERVER: string = 'wss://localhost:5500/ws'
 import { getToken, refresh } from './token'
+
 interface ApiResponse<T> {
   code: number
   message: string
@@ -10,56 +11,66 @@ interface ApiResponse<T> {
 export async function request<T>(
   url: string,
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
-  params: any = {}, // 请求参数
-  needToken: boolean, //需要accesstoken吗
-  retry = false, //二次尝试参数不需要传
+  params: any = {},
+  needToken: boolean,
+  retry = false,
+  isFormData = false,
 ): Promise<ApiResponse<T>> {
-  url = `${SERVER}${url}`
+  const firstUrl = url
+  let targetUrl = `${SERVER}${url}`
 
-  // GET/DELETE 方法，把 params 转为查询参数
+  if (needToken && isFormData) {
+    const token = getToken()
+    if (token) {
+      targetUrl += (targetUrl.includes('?') ? '&' : '?') + 'token=' + token
+    }
+  }
+
+  // 处理 GET 参数
   if (method === 'GET' || method === 'DELETE') {
     const queryParams = new URLSearchParams(params as Record<string, string>).toString()
     if (queryParams) {
-      url = `${url}?${queryParams}`
+      targetUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}${queryParams}`
     }
   }
 
-  // 设置默认请求头
   const headers: Record<string, string> = {}
 
-  // 如果是 POST/PUT(有参数)，需要设置 Content-Type
-  if (method === 'POST' || method === 'PUT') {
-    headers['Content-Type'] = 'application/json'
-  }
-
-  // 需要token，添加到 Authorization
-  if (needToken) {
-    if (!getToken()) {
-      //token获取失败
+  // ==============================================
+  // ✅ 修复：上传文件时，不往 headers 加 token
+  // ==============================================
+  if (needToken && !isFormData) {
+    const token = getToken()
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
     }
-    headers['Authorization'] = `Bearer ${getToken()}`
   }
 
-  const defaultConfig: RequestInit = {
+  let body: any = undefined
+
+  if (isFormData) {
+    body = params
+  } else {
+    if (method === 'POST' || method === 'PUT') {
+      headers['Content-Type'] = 'application/json'
+      body = JSON.stringify(params)
+    }
+  }
+
+  const config: RequestInit = {
     method,
-    headers,
-    body: method === 'POST' || method === 'PUT' ? JSON.stringify(params) : undefined,
+    headers: isFormData ? undefined : headers, // 上传文件必须 undefined
+    body: body,
     credentials: 'include',
   }
 
-  const response = await fetch(url, defaultConfig)
-
+  const response = await fetch(targetUrl, config)
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
-
   const result: ApiResponse<T> = await response.json()
 
-  // if (result.code !== 200) {
-  //   throw new Error(result.message || '业务错误')
-  // }
-  //999代表token过期
   if (result.code === 999 && !retry) {
     await refresh()
-    return request(url.replace(SERVER, ''), method, params, true, true)
+    return request(firstUrl, method, params, needToken, true, isFormData)
   }
 
   return result

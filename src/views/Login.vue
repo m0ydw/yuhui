@@ -312,6 +312,7 @@ onMounted(async () => {
   if (localStorage.getItem('hasRefresh') === 'true') {
     //登录请求
     const res = await request<logFinalData>('api/auth/tokenLogin', 'GET', {}, false)
+    console.log(res)
     if (res.code === 200) {
       router.push({ name: 'allRoom' })
     }

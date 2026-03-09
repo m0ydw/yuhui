@@ -29,12 +29,35 @@
         退出
       </button>
     </div>
+
+    <div class="user">
+      <div class="avatar-cotain" @click="handleInfo">
+        <div class="avatar"></div>
+        <!-- 悬浮部分 -->
+        <div class="userInfo" ref="Info" v-if="visible">
+          <div class="InfoUserAvatar">
+            <div class="avatar"></div>
+            <button class="changeInfo" @click="openChange">修改信息</button>
+          </div>
+
+          <div class="InfoUserName">
+            <div class="InfoTitle">昵称</div>
+            <div class="content">{{ userName }}</div>
+          </div>
+          <div class="createAt">
+            创建于{{ createAt }}
+          </div>
+        </div>
+      </div>
+      <div class="userName" :title="userName">{{ userName }}</div>
+    </div>
   </nav>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { onMounted } from 'vue';
 import { request, type createRoom } from '@/api';
 import { getToken } from '@/api';
 import { getPopFlex } from '@/models/flexpop/flexpop';
@@ -71,6 +94,65 @@ const handleLogout = () => {
   console.log('退出');
 
 };
+//用户模块
+const userName = ref('11111111111111111111111111111111111111111')
+const createAt = ref('')
+onMounted(() => {
+  try {
+
+    let str = localStorage.getItem('User_Data')
+    if (!str) throw new Error('noStr')
+    let userData = JSON.parse(str)
+    if (!userData.name || !userData.createAt) throw new Error('noRealData')
+    console.log(userData)
+    //更新名称
+    userName.value = userData.name
+    //createat
+    createAt.value = new Date(userData.createAt).toLocaleString('zh-CN', { timeZone: 'UTC' })
+    //头像
+
+
+  } catch (err) {
+
+  }
+
+})
+
+//用户信息设置
+import setUser from './sectionPop/setUser.vue';
+const openChange = () => {
+  const pop = getPopFlex()
+  if (!pop) return
+  pop.value.open(setUser, {})
+}
+
+
+//控制显示
+const visible = ref(false)
+const Info = ref()
+//隐藏函数
+const handleClickOutside = () => {
+  visible.value = false
+  document.removeEventListener('pointerup', listenInfo)
+}
+
+// 监听函数
+const listenInfo = (e: PointerEvent) => {
+  if (!Info.value?.contains(e.target as Node)) {
+    handleClickOutside()
+  }
+}
+// 主要函数
+const handleInfo = (e: PointerEvent) => {
+  e.stopPropagation()
+  visible.value = true
+  //鼠标捕获
+  Info.value?.setPointerCapture(e.pointerId)
+  // 挂载监听
+  document.addEventListener('pointerup', listenInfo)
+
+
+}
 
 </script>
 
@@ -82,12 +164,13 @@ const handleLogout = () => {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  /* justify-content: space-between; */
   padding: 0 24px;
   box-sizing: border-box;
   position: sticky;
   top: 0;
   margin-bottom: 20px;
+  gap: 10px;
 }
 
 .logo {
@@ -100,10 +183,57 @@ const handleLogout = () => {
   cursor: default;
 }
 
+
+
+
+
 .actions {
   display: flex;
   align-items: center;
   gap: 12px;
+  margin-left: auto;
+  /* 把第二个推到右边 */
+  margin-right: 0;
+  /* 确保右边距为0，紧贴第三个 */
+}
+
+.user {
+  text-align: center;
+  line-height: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  transform: translateY(2px);
+}
+
+.userName {
+  padding-left: 15px;
+  display: inline-block;
+  width: 80px;
+  height: auto;
+  line-height: 32px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  box-sizing: border-box;
+  font-size: 13px;
+}
+
+/* 头像 */
+.avatar {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #e0e0e0;
+  line-height: 36px;
+  cursor: pointer;
+}
+
+.avatar-cotain {
+  display: inline-block;
+  width: 32px;
+  height: 32px;
 }
 
 .search-group {
@@ -206,5 +336,112 @@ const handleLogout = () => {
   height: 20px;
   background-color: #e0e0e0;
   margin: 0 4px;
+}
+
+.userInfo {
+  display: grid;
+  grid-template-columns: 1fr;
+  /* 保持单列布局 */
+  grid-auto-rows: auto;
+  /* 行高自动适应内容 */
+  position: absolute;
+  width: 150px;
+  /* 最小宽度（防止太窄） */
+  height: auto;
+  /* 高度自动适应 */
+  background-color: #fff;
+  z-index: 9999;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateX(-90px);
+}
+
+.InfoUserAvatar {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  /* 左边固定40px，右边自适应 */
+  height: auto;
+  /* 高度自适应 */
+  min-height: 32px;
+  /* 最小高度 */
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  font-size: 14px;
+  white-space: nowrap;
+  /* 防止折行导致宽高乱跳 */
+  padding-left: 10px;
+
+  .avatar {
+    cursor: auto;
+  }
+
+}
+
+.InfoUserName {
+  display: grid;
+  grid-template-columns: 40px 1fr;
+  /* 左边固定40px，右边自适应 */
+  height: auto;
+  /* 高度自适应 */
+  min-height: 32px;
+  /* 最小高度 */
+  gap: 8px;
+  align-items: center;
+  text-align: left;
+  font-size: 14px;
+  white-space: nowrap;
+  /* 防止折行导致宽高乱跳 */
+}
+
+.InfoUserName .InfoTitle {
+  font-weight: 500;
+  color: #666;
+  font-size: 13px;
+  text-align: left;
+  /* 标题左对齐更好看 */
+}
+
+.InfoUserName .content {
+  padding-left: 0;
+  color: #333;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.InfoTitle {
+  line-height: auto;
+  padding-left: 10px;
+}
+
+.createAt {
+  font-size: 12px;
+  color: #999;
+  line-height: 1;
+  opacity: 0.8;
+  height: 12px;
+}
+
+.changeInfo {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+  background: #fff;
+  font-size: 12px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.changeInfo:hover {
+  border-color: #409eff;
+  color: #409eff;
+  background: #f5faff;
 }
 </style>
