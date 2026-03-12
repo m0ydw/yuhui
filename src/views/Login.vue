@@ -90,6 +90,7 @@ import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { request, type loginData, type realRegData, type regData, setToken, type logFinalData } from '@/api'
 import { addBaseMessager } from '@/models'
 import router from '@/router'
+import { nextTick } from 'vue'
 
 /* ======================
    状态控制
@@ -234,9 +235,8 @@ async function handleLogin() {
     setToken(response.data.accessToken)
     //标记
     localStorage.setItem('hasRefresh', 'true')
-    setTimeout(() => {
-      addBaseMessager('登录成功')
-    }, 10);
+    addBaseMessager('登录成功')
+    await nextTick()
     router.push({ name: 'allRoom' })
   } else {
     addBaseMessager(response.data.status)

@@ -1,5 +1,9 @@
 import { request, type ticket } from '@/api'
-
+import { getPopFlex } from '../flexpop/flexpop'
+import roomFailed from '@/components/sectionPop/roomFailed.vue'
+import LoginOther from '@/components/sectionPop/LoginOther.vue'
+import unknowErr from '@/components/sectionPop/unknowErr.vue'
+const pop = getPopFlex()
 export class WebSocketClient {
   public ws: WebSocket | null = null
   public url: string
@@ -72,7 +76,21 @@ export class WebSocketClient {
     })
     this.ws = new WebSocket(`${this.url}?${params.toString()}`)
     this.ws.onopen = () => console.log('WebSocket 已连接')
-    this.ws.onclose = (event) => console.log(event.code, event.reason)
+    this.ws.onclose = (event) => {
+      console.log(event.code, event.reason)
+      switch (event.code) {
+        case 1009:
+        case 1010:
+        case 1008:
+          pop?.value.open(roomFailed, { message: event.reason, code: event.code })
+          break
+        case 1013:
+          pop?.value.open(LoginOther)
+          break
+        case 1006:
+          pop?.value.open(unknowErr)
+      }
+    }
     this.ws.onerror = (error) => console.error('WebSocket 错误:', error)
     this.ws.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data)

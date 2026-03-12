@@ -20,6 +20,7 @@ export interface realRegData {
 export interface logFinalData {
   name: string
   createAt: string
+  avatar: string
 }
 export interface ticket {
   ticket: string

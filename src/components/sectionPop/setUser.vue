@@ -1,66 +1,111 @@
 <template>
-  <div class="setUser">
-    <div class="header">
+  <div class="setUser" :class="{ isImg: showCropper }">
+    <div class="header" v-if="!showCropper">
       <div class="title">修改用户信息</div>
       <button class="cls" @click="emit('close')">关闭</button>
     </div>
 
-    <div class="body">
-      <!-- 左侧：头像区域 -->
+    <div class="body" v-if="!showCropper">
       <div class="side">
         <div class="sideTitle">头像</div>
         <div class="avatarContainer">
-          <div class="avatarPreview"></div>
-          <button class="changeAvatarBtn" @click="triggerAvatarUpload">
-            更换头像
-          </button>
+          <div class="avatarPreview" :style="{
+            backgroundImage: `url(${mydata.userAvatar})`, backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }"></div>
+          <button class="changeAvatarBtn" @click="triggerAvatarUpload">更换头像</button>
         </div>
       </div>
 
-      <!-- 右侧：昵称 + 保存 -->
       <div class="main">
         <div class="previewBox">
-          <div class="bigAvatarPreview"></div>
+          <div class="bigAvatarPreview" :style="{
+            backgroundImage: `url(${mydata.userAvatar})`, backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }"></div>
         </div>
 
         <div class="footer">
           <div class="meta">
             <div class="metaTitle">个人信息</div>
-
-            <!-- 修改昵称 -->
             <div class="nameBox">
               <span class="nameTitle">昵称</span>
               <input type="text" class="userName" v-model="nickname" @input="handleInput" placeholder="请输入昵称" />
             </div>
-
           </div>
 
           <div class="action">
-            <div class="saveBtn" @click="saveUserInfo" :class="{ disable: isReqIng }">
-              保存修改
-            </div>
+            <div class="saveBtn" @click="saveUserInfo" :class="{ disable: isReqIng }">保存修改</div>
           </div>
         </div>
       </div>
     </div>
+
     <!-- 图片选择 -->
     <input ref="fileInput" type="file" accept="image/*" style="display: none" @change="onAvatarSelected" />
-    <!-- 图片裁剪 -->
 
+    <!-- 子组件裁剪 -->
+    <div v-if="showCropper" class="cropper-wrapper">
+      <AvatarCropper :file="selectedFile" @close="showCropper = false" @success="onCropSuccess" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { addBaseMessager } from '@/models';
-import avatarCropper from '../avatarCropper.vue';
+import { ref } from 'vue'
+import AvatarCropper from './AvatarCropper.vue'
+import { compressImage } from '@/utils/jpgZip'
+import { request } from '@/api'
+import { addBaseMessager } from '@/models'
+
 const emit = defineEmits<{ close: [] }>()
 
-// 昵称
 const nickname = ref('')
 const isReqIng = ref(false)
+const fileInput = ref<HTMLInputElement | null>(null)
 
-// 限制昵称长度
+const showCropper = ref(false)
+const selectedFile = ref<File | null>(null)
+
+const triggerAvatarUpload = () => {
+  fileInput.value?.click()
+}
+
+const onAvatarSelected = async (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+  selectedFile.value = file
+  showCropper.value = true
+  target.value = ''
+}
+const onCropSuccess = async (blob: Blob) => {
+  if (!blob) return
+
+  try {
+    const compressedFile = new File([blob], 'avatar.jpg', { type: blob.type, lastModified: Date.now() })
+    const formData = new FormData()
+    formData.append('avatar', compressedFile)
+
+    // 上传裁剪后的头像
+    const res = await request<{ url: string }>('api/uploadAvatar', 'POST', formData, true, false, true)
+    console.log('上传成功', res)
+    if (res.code === 200) {
+      addBaseMessager('头像上传成功')
+      //更新userdata
+      userData.changeMyAvatar(res.data.url)
+    } else {
+      addBaseMessager('头像上传失败')
+    }
+  } catch (err) {
+    console.error('上传失败', err)
+  } finally {
+    showCropper.value = false
+  }
+}
+
 const handleInput = (e: Event) => {
   const target = e.target as HTMLInputElement
   if (target.value.length > 16) {
@@ -69,58 +114,14 @@ const handleInput = (e: Event) => {
   }
 }
 
-// =============================================
-// 触发 更换头像（你在这里写打开文件选择框逻辑）
-// =============================================
-import { request } from '@/api';
-import { compressImage } from '@/utils/jpgZip';
-const fileInput = ref<HTMLInputElement | null>(null)
-const triggerAvatarUpload = () => {
-  fileInput.value?.click()
-  // 你写：文件选择、上传、预览等逻辑
-  // uploadAvatar()
-}
-const onAvatarSelected = async (e: Event) => {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  try {
-    const compressedFile = await compressImage(file)
-    const formData = new FormData()
-    formData.append('avatar', compressedFile)
-    console.log(formData)
-    const res = await request<{}>(
-      'api/uploadAvatar',
-      'POST',
-      formData,
-      true,
-      false,
-      true
-    )
-    console.log('上传成功', res)
-  } catch (err) {
-    console.error('上传失败', err)
-  } finally {
-    target.value = ''
-  }
-}
-// =============================================
-// 保存昵称（提交到后端）
-// =============================================
 const saveUserInfo = async () => {
   if (!nickname.value.trim()) {
     addBaseMessager('请输入昵称')
     return
   }
-
   isReqIng.value = true
   try {
-    // ==========================================
-    // 这里写调用 修改昵称 接口
     // await request('api/updateNickname', 'POST', { nickname: nickname.value })
-    // ==========================================
-
     addBaseMessager('保存成功')
     emit('close')
   } catch (err) {
@@ -129,25 +130,23 @@ const saveUserInfo = async () => {
     isReqIng.value = false
   }
 }
-
+//初始化
+import { onMounted } from 'vue'
+import { URLSERVER } from '@/api'
+import userDataStore from '@/stores/userDataStores'
+const userData = userDataStore()
+const mydata = userData.getMyUserData()
 onMounted(() => {
   try {
-    let str = localStorage.getItem('User_Data')
-    if (!str) throw new Error('noStr')
-    let userData = JSON.parse(str)
-    if (!userData.name || !userData.createAt) throw new Error('noRealData')
-    console.log(userData)
-
-    //初始化
-    nickname.value = userData.name
+    nickname.value = mydata.value.userName
 
   } catch (err) {
-
+    console.log(err)
   }
 })
-</script>
 
-<style scoped>
+</script>
+<style>
 .setUser {
   width: min(700px, 92vw);
   height: min(500px, 80vh);
@@ -331,5 +330,31 @@ onMounted(() => {
 .saveBtn.disable {
   background: #b3d7ff;
   cursor: not-allowed;
+}
+
+.isImg {
+  position: relative;
+  /* 父组件保持布局 */
+  box-shadow: none;
+  border-radius: none;
+  border: none;
+}
+
+/* 隐藏原本内容，但保留父容器 */
+.setUser.isImg>*:not(.cropper-wrapper) {
+  visibility: hidden;
+  /* 或 opacity: 0 */
+}
+
+/* 裁剪器覆盖整个父组件 */
+.cropper-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 10;
+  background: #fff;
+  /* 或半透明遮罩 */
 }
 </style>

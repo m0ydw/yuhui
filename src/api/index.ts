@@ -1,5 +1,6 @@
 export const SERVER: string = `https://localhost:5500/`
 export const WSERVER: string = 'wss://localhost:5500/ws'
+export const URLSERVER: string = `https://localhost:5500`
 import { getToken, refresh } from './token'
 
 interface ApiResponse<T> {

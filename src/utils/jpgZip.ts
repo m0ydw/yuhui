@@ -1,15 +1,8 @@
-/**
- * 图片截取压缩（固定尺寸 + 清晰质量 + 不模糊）
- * @param file 原始文件
- * @param maxWidth 最大宽度
- * @param maxHeight 最大高度
- * @param quality 质量 0.1 - 1
- */
 export function compressImage(
   file: File,
-  maxWidth = 800,
-  maxHeight = 800,
-  quality = 0.8,
+  maxWidth = 1200, // 更大尺寸
+  maxHeight = 1200,
+  quality = 0.85, // 更高质量
 ): Promise<Blob> {
   return new Promise((resolve) => {
     const img = new Image()
@@ -19,10 +12,10 @@ export function compressImage(
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')!
 
-      // 等比缩放
       let width = img.width
       let height = img.height
 
+      // 只缩超大图，不压太小
       if (width > maxWidth) {
         height = (maxWidth / width) * height
         width = maxWidth
@@ -36,13 +29,13 @@ export function compressImage(
       canvas.height = height
       ctx.drawImage(img, 0, 0, width, height)
 
-      // 转 Blob，清晰质量 0.8
+      // 提高质量 → 更清晰、更大体积
       canvas.toBlob(
         (blob) => {
           resolve(blob!)
         },
         'image/jpeg',
-        quality,
+        quality, // 0.85 = 高清
       )
     }
   })

@@ -1,4 +1,5 @@
 <template>
+  <!-- 1013  -->
   <div class="root">
     <div class="title">清空画布</div>
     <div class="desc" v-if="online">联机模式下已禁用清空画布（避免与多人同步状态冲突）。</div>
@@ -85,4 +86,3 @@ function confirm() {
   cursor: not-allowed;
 }
 </style>
-

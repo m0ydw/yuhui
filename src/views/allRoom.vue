@@ -31,7 +31,9 @@ import { ref, onMounted } from 'vue';
 const roomMap = createAllRoomMap()
 
 
-import { request, type logFinalData } from '@/api';
+import { request, type logFinalData, URLSERVER } from '@/api';
+import userDataStore from '@/stores/userDataStores';
+let userdata = userDataStore()
 onMounted(async () => {
   myWebsocketClient.disconnect()
   changeUserId(await myWebsocketClient.connect('allRoom'))
@@ -47,7 +49,11 @@ onMounted(async () => {
   //获取用户的名称和
   const res = await request<logFinalData>('api/auth/tokenLogin', 'GET', {}, false)
   console.log(res)
-  localStorage.setItem('User_Data', JSON.stringify(res.data))
+  let userData = { userName: res.data.name, userAvatar: res.data.avatar }
+  localStorage.setItem('User_Data', JSON.stringify(userData))
+  localStorage.setItem('createAt', res.data.createAt)
+  //更新
+  userdata.setMyUserData(userData)
 })
 </script>
 

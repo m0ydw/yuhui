@@ -38,10 +38,11 @@ import {
   resizeDrawCanvas,//挂载缩放事件
   resizeCursorCanvas,
   newBoard,//new一个board二维表格空间
-  boardDataToImage,
 } from '@/utils'
 import { useRoute, useRouter } from 'vue-router'
 import useClientStore from '@/stores/clientStores'
+import userDataStore from '@/stores/userDataStores'
+const userDataStoreTEAMPLATE = userDataStore()
 const router = useRouter()
 const route = useRoute()
 let hasPlayer = false
@@ -84,6 +85,8 @@ onMounted(async () => {
     others = joinRes.data.others
     History = joinRes.data.history
     otherCursors = joinRes.data.otherCursors
+    //头像存储
+    userDataStoreTEAMPLATE.setUSERS(joinRes.data.allAvatar)
     switch (joinRes.data.status) {
       case true:
         console.log('连接成功')

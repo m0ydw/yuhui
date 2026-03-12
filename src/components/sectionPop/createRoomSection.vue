@@ -302,6 +302,8 @@ const createRoomAction = async () => {
   border-radius: 10px;
   color: #949393;
   margin-right: 15px;
+  width: 193px;
+  height: auto;
 }
 
 .newBoard.row.active {

@@ -220,6 +220,4 @@ input[type=number]::-webkit-inner-spin-button {
   appearance: none;
   margin: 0;
 }
-
-.size-change {}
 </style>

@@ -8,11 +8,21 @@
 
       <div class="chat-body" ref="listRef" @scroll="onScroll">
         <div class="spacer" :style="{ height: topPadding + 'px' }"></div>
-        <!-- 可视 -->
+        <!-- 消息部分 -->
         <div v-for="msg in visibleMessages" :key="msg.id" class="chat-item" :class="{ 'is-me': isme(msg.userId) }"
           @mouseenter="hoverMsgId = msg.id" @mouseleave="hoverMsgId = ''">
           <!-- 头像 -->
-          <div class="avatar"></div>
+          <div class="avatar" :style="isme(msg.userId) ? {
+            backgroundImage: `url(${mydata.userAvatar})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          } : {
+            backgroundImage: `url(${dataStore.getUserData(msg.userId)?.userAvatar || ''})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
+          }"></div>
           <div class="content">
             <div class="meta">
               <span class="user">{{ msg.name }}</span>
@@ -23,7 +33,7 @@
             <div class="text">{{ msg.text }}</div>
           </div>
         </div>
-
+        <!-- 消息部分 -->
         <div class="spacer" :style="{ height: bottomPadding + 'px' }"></div>
 
         <div v-if="loading" class="loading">加载中...</div>
@@ -59,6 +69,9 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
+import userDataStore from '@/stores/userDataStores'
+const dataStore = userDataStore()
+const mydata = dataStore.getMyUserData()
 
 const visible = computed(() => props.modelValue)
 const messages = ref<ChatMessage[]>([])

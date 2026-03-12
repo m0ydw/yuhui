@@ -3,12 +3,16 @@
 import { WebSocketClient } from '../clientType'
 import { newStrokeFlow } from '@/utils'
 import { addUserMessager } from '@/models/message/message'
+import userDataStore from '@/stores/userDataStores'
+const dataStore = userDataStore()
 export function addMainBoardEvent(client: WebSocketClient, Flow: ReturnType<typeof newStrokeFlow>) {
   //进入房间
   ;(client.on('whoJoins', (data) => {
     const aim = data.data
     Flow.newUser(aim.user)
     addUserMessager(aim.name, '进入了房间')
+    //建立对应数据
+    dataStore.setUserData(aim.user, { userName: aim.name, userAvatar: aim.hisAvatar })
   }),
     client.on('startStroke', (data) => {
       const aim = data.data

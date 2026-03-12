@@ -32,24 +32,32 @@
 
     <div class="user">
       <div class="avatar-cotain" @click="handleInfo">
-        <div class="avatar"></div>
+        <div class="avatar" :style="{
+          backgroundImage: `url(${mydata.userAvatar})`, backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }"></div>
         <!-- 悬浮部分 -->
         <div class="userInfo" ref="Info" v-if="visible">
           <div class="InfoUserAvatar">
-            <div class="avatar"></div>
+            <div class="avatar" :style="{
+              backgroundImage: `url(${mydata.userAvatar})`, backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundRepeat: 'no-repeat'
+            }"></div>
             <button class="changeInfo" @click="openChange">修改信息</button>
           </div>
 
           <div class="InfoUserName">
             <div class="InfoTitle">昵称</div>
-            <div class="content">{{ userName }}</div>
+            <div class="content">{{ mydata.userName }}</div>
           </div>
           <div class="createAt">
             创建于{{ createAt }}
           </div>
         </div>
       </div>
-      <div class="userName" :title="userName">{{ userName }}</div>
+      <div class="userName-nav" :title="mydata.userName">{{ mydata.userName }}</div>
     </div>
   </nav>
 </template>
@@ -62,6 +70,8 @@ import { request, type createRoom } from '@/api';
 import { getToken } from '@/api';
 import { getPopFlex } from '@/models/flexpop/flexpop';
 import createRoomSection from '@/components/sectionPop/createRoomSection.vue';
+import { URLSERVER } from '@/api'
+
 const router = useRouter()
 const inputRoomId = ref('');
 
@@ -95,22 +105,20 @@ const handleLogout = () => {
 
 };
 //用户模块
-const userName = ref('11111111111111111111111111111111111111111')
+
 const createAt = ref('')
+
+
+import userDataStore from '@/stores/userDataStores';
+const userdata = userDataStore()
+const mydata = userdata.getMyUserData()
 onMounted(() => {
   try {
 
-    let str = localStorage.getItem('User_Data')
-    if (!str) throw new Error('noStr')
-    let userData = JSON.parse(str)
-    if (!userData.name || !userData.createAt) throw new Error('noRealData')
-    console.log(userData)
-    //更新名称
-    userName.value = userData.name
+    const createTime = localStorage.getItem('createAt')
     //createat
-    createAt.value = new Date(userData.createAt).toLocaleString('zh-CN', { timeZone: 'UTC' })
-    //头像
-
+    if (createTime)
+      createAt.value = new Date(createTime).toLocaleString('zh-CN', { timeZone: 'UTC' })
 
   } catch (err) {
 
@@ -205,7 +213,7 @@ const handleInfo = (e: PointerEvent) => {
   transform: translateY(2px);
 }
 
-.userName {
+.userName-nav {
   padding-left: 15px;
   display: inline-block;
   width: 80px;
