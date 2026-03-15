@@ -38,7 +38,7 @@ export function resizeDrawCanvas(
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
 
   // 4. 渲染
-  if (board) board.render(ctx, canvas)
+  if (board) board.render(ctx, canvas, true)
 }
 
 export function resizeCursorCanvas(canvas: HTMLCanvasElement) {

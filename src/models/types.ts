@@ -34,7 +34,7 @@ export interface Board {
    * 注意：通常在 addStroke 之后调用
    */
   renderStrokeToWorld: (stroke: Stroke) => void
-  render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
+  render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement, noFps?: boolean) => void
   setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => void
   setPanAbsolute: (
     panX: number,

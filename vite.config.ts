@@ -5,17 +5,20 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https需要的
-import basicSsl from '@vitejs/plugin-basic-ssl'
+// import basicSsl from '@vitejs/plugin-basic-ssl'
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), vueDevTools(), basicSsl()],
+  plugins: [vue(), vueDevTools()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   server: {
-    https: {},
+    https: {
+      key: fileURLToPath(new URL('./localhost+2-key.pem', import.meta.url)),
+      cert: fileURLToPath(new URL('./localhost+2.pem', import.meta.url)),
+    },
     proxy: {
       '/api': {
         target: 'https://localhost:5500', // 后端地址

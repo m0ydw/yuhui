@@ -106,6 +106,10 @@ const bottomPadding = computed(() => totalHeight.value - topPadding.value - visi
 const viewportHeight = computed(() => (listRef.value ? listRef.value.clientHeight : 0))
 //消息发送的判断
 const canSend = computed(() => draft.value.trim().length > 0 && draft.value.length <= 100)
+//滚动设置判断
+const isAtBottom = ref(true)
+const lastMessageLength = ref(0)
+
 //根据时间戳返回时间
 function formatTime(ts: number) {
   try {
@@ -118,9 +122,25 @@ function formatTime(ts: number) {
 function onScroll() {
   if (!listRef.value) return
   scrollTop.value = listRef.value.scrollTop
+
+  checkIsAtBottom()
+
   if (scrollTop.value < 40 && hasMore.value && !loading.value) {
     loadMore()
   }
+}
+//滚动到最底部
+function scrollToBottom() {
+  setTimeout(() => {
+    if (!listRef.value) return
+    listRef.value.scrollTop = listRef.value.scrollHeight
+  }, 0)
+}
+//检查是否在底部更新 isAtBottom
+function checkIsAtBottom() {
+  if (!listRef.value) return
+  const { scrollTop, scrollHeight, clientHeight } = listRef.value
+  isAtBottom.value = scrollTop + clientHeight >= scrollHeight - 20
 }
 
 function close() {
@@ -152,11 +172,12 @@ function handleChatHistory(raw: any) {
   cursor.value = data.cursor ?? null
   loading.value = false
 }
-
+//socket 收到新消息的处理函数
 function handleChatMessage(raw: any) {
   const data = raw.data
   if (!data || data.roomId !== props.roomId || !data.msg) return
   const msg = data.msg as ChatMessage
+  //如果消息已存在（可能是之前历史消息里有），就更新它；否则添加到列表末尾
   const exists = messages.value.find((m) => m.id === msg.id)
   if (exists) {
     Object.assign(exists, msg)
@@ -209,6 +230,9 @@ function send() {
     }),
   )
   draft.value = ''
+
+  // 发送消息滚到最底部
+  scrollToBottom()
 }
 
 onMounted(() => {
@@ -221,7 +245,13 @@ onBeforeUnmount(() => {
   myWebsocketClient.off('chatHistory', handleChatHistory)
   myWebsocketClient.off('chatMessage', handleChatMessage)
 })
-
+// 消息变化时，如果在底部就自动滚动
+watch(messages, () => {
+  if (isAtBottom.value) {
+    scrollToBottom()
+  }
+}, { deep: true })
+// 打开聊天时 → 直接滚到底
 watch(
   () => visible.value,
   (v) => {
@@ -230,6 +260,8 @@ watch(
       hasMore.value = true
       cursor.value = null
       joinChat()
+      //默认滚到最底部
+      setTimeout(scrollToBottom, 100)
     }
   },
   { immediate: false },

@@ -242,7 +242,11 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
   let lastFrameTime = 0
   // 每帧之间的最小间隔，默认按 60fps 约 16.7ms
   let minFrameInterval = 1000 / 60
-  const rafRender = (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
+  const rafRender = (
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    noFps: boolean = false,
+  ) => {
     lastCallTime = performance.now() // 外部调用时间刷新
 
     // RAF 正在运行，直接更新 lastCallTime 即可
@@ -256,8 +260,8 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
         rafId = 0 // 必须重置，这样才能下次重新启动
         return
       }
-      // 限制帧率：间隔不足时跳过本帧渲染
-      if (now - lastFrameTime >= minFrameInterval) {
+      //  当nofps为true时不限制帧率   限制帧率：间隔不足时跳过本帧渲染
+      if (noFps || now - lastFrameTime >= minFrameInterval) {
         lastFrameTime = now
         _render(ctx, canvas)
       }
@@ -331,8 +335,11 @@ export function newBoard(gridSize: number, vw: Ref<number>, vh: Ref<number>): Bo
     // 因此这里无需单独对某条笔画做 tile 标脏处理
     renderStrokeToWorld: (_stroke: Stroke): void => {},
     //渲染
-    render: (ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement): void =>
-      rafRender(ctx, canvas),
+    render: (
+      ctx: CanvasRenderingContext2D,
+      canvas: HTMLCanvasElement,
+      noFps: boolean = false,
+    ): void => rafRender(ctx, canvas, noFps),
     //控制视图(传入相对位置)
     setPan: (x: number, y: number, ctx: CanvasRenderingContext2D, canvas: HTMLCanvasElement) => {
       panX += x
