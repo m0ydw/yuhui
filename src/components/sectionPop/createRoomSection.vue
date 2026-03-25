@@ -206,29 +206,118 @@ const createRoomAction = async () => {
     hasStroke = strokes.length > 0
   }
 
-  let data = {
-    roomId: roomId.value,
-    roomName: roomName.value,
-    peopleLimit: peopleLimit.value,
-    hasStroke,
-    strokes
-  }
-  //请求
-  const res = await request<createRoomData>('api/createRoom', 'POST', data, true)
+  try {
+    // 没有初始化笔画：走原有一次性创建
+    if (!hasStroke || !strokes || strokes.length === 0) {
+      const data = {
+        roomId: roomId.value,
+        roomName: roomName.value,
+        peopleLimit: peopleLimit.value,
+        hasStroke: false,
+      }
+      const res = await request<createRoomData>('api/createRoom', 'POST', data, true)
+      if (res.code !== 200) throw new Error(res.message || '创建房间失败')
+      addBaseMessager('创建成功')
+      emit('close')
+      return
+    }
 
-  console.log(res)
-  if (res.code === 200) {
+    const hasInvalidStroke = strokes.some(item => item === undefined || item === null);
+    if (hasInvalidStroke) {
+      throw new Error("白板数据包含无效内容，请检查后重试");
+    }
+
+    // 分块上传初始化笔画：避免后端请求体超过 2MB
+    const encoder = new TextEncoder()
+    const byteLen = (s: string) => encoder.encode(s).length
+    const overheadBytes = byteLen(
+      JSON.stringify({
+        roomId: roomId.value,
+        chunkIndex: 0,
+        totalChunks: 1,
+        strokes: [],
+      }),
+    )
+
+    const MAX_CHUNK_BYTES = 600 * 1024
+
+    const strokeSizes = strokes.map((st) => byteLen(JSON.stringify(st)))
+    const chunks: Stroke[][] = []
+    let cur: Stroke[] = []
+    let curBytes = 0
+
+    for (let i = 0; i < strokes.length; i++) {
+      const st = strokes[i]
+      const stBytes = strokeSizes[i] || 0
+      const willBytes = overheadBytes + curBytes + stBytes
+      if (cur.length > 0 && willBytes > MAX_CHUNK_BYTES) {
+        chunks.push(cur)
+        cur = [st!]
+        curBytes = stBytes
+      } else {
+        cur.push(st!)
+        curBytes += stBytes
+      }
+    }
+    if (cur.length) chunks.push(cur)
+
+    const totalChunks = chunks.length
+    if (totalChunks <= 0) throw new Error('创建房间失败：初始化分片为空')
+
+    // 1) 创建房间并进入“初始化上传中”（不发送 roomAdd）
+    const startRes = await request<createRoomData>('api/createRoom', 'POST', {
+      roomId: roomId.value,
+      roomName: roomName.value,
+      peopleLimit: peopleLimit.value,
+      hasStroke: true,
+      chunkMode: true,
+      totalChunks,
+    }, true)
+
+    if (startRes.code !== 200) {
+      throw new Error(startRes.message || '创建房间失败')
+    }
+
+    // 2) 上传每个 chunk
+    for (let i = 0; i < chunks.length; i++) {
+      const chunkRes = await request<createRoomData>(
+        'api/roomInitChunk',
+        'POST',
+        {
+          roomId: roomId.value,
+          chunkIndex: i,
+          totalChunks,
+          strokes: chunks[i],
+        },
+        true,
+      )
+      if (chunkRes.code !== 200) {
+        throw new Error(chunkRes.message || '上传初始化数据失败')
+      }
+    }
+
+    // 3) 合并并发送 roomAdd
+    const finishRes = await request<createRoomData>(
+      'api/roomInitFinish',
+      'POST',
+      {
+        roomId: roomId.value,
+        totalChunks,
+      },
+      true,
+    )
+    if (finishRes.code !== 200) {
+      throw new Error(finishRes.message || '创建房间失败')
+    }
+
     addBaseMessager('创建成功')
     emit('close')
-    return
-  } else {
-    addBaseMessager(res.message)
+  } catch (err) {
+    console.error(err)
+    addBaseMessager('创建房间失败')
+  } finally {
+    isReqIng.value = false
   }
-
-
-
-
-  isReqIng.value = false
 }
 </script>
 

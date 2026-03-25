@@ -10,7 +10,10 @@ export class WebSocketClient {
   private userId: string | null = null
 
   // 核心改进：增加两个内部管理器
-  private pendingPromises = new Map<string, { resolve: Function; reject: Function }>()
+  private pendingPromises = new Map<
+    string,
+    { resolve: Function; reject: Function; timer: ReturnType<typeof setTimeout> }
+  >()
   private specialHandlers = new Map<string, (data: any) => boolean>() // 返回 true 则不再分发
   private isConnecting = false //正在连接？
 
@@ -26,6 +29,14 @@ export class WebSocketClient {
    */
   waitForMessage(type: string, timeout = 10000): Promise<any> {
     return new Promise((resolve, reject) => {
+      // 如果同一个 type 已经在等待，先取消旧的等待，避免旧 timer 后续触发“幽灵超时”
+      const existed = this.pendingPromises.get(type)
+      if (existed) {
+        clearTimeout(existed.timer)
+        existed.reject(new Error('等待消息已被新的请求覆盖'))
+        this.pendingPromises.delete(type)
+      }
+
       const timer = setTimeout(() => {
         this.pendingPromises.delete(type)
         reject(new Error(`等待消息类型 "${type}" 超时`))
@@ -36,7 +47,11 @@ export class WebSocketClient {
           clearTimeout(timer)
           resolve(data)
         },
-        reject,
+        reject: (err: any) => {
+          clearTimeout(timer)
+          reject(err)
+        },
+        timer,
       })
     })
   }
@@ -78,6 +93,12 @@ export class WebSocketClient {
     this.ws.onopen = () => console.log('WebSocket 已连接')
     this.ws.onclose = (event) => {
       console.log(event.code, event.reason)
+      // 连接断开时清理等待中的 Promise，避免后续 timer 回调再次触发
+      for (const [, pending] of this.pendingPromises) {
+        clearTimeout(pending.timer)
+        pending.reject(new Error(event.reason || 'WebSocket disconnected'))
+      }
+      this.pendingPromises.clear()
       switch (event.code) {
         case 1009:
         case 1010:
@@ -91,7 +112,14 @@ export class WebSocketClient {
           pop?.value.open(unknowErr)
       }
     }
-    this.ws.onerror = (error) => console.error('WebSocket 错误:', error)
+    this.ws.onerror = (error) => {
+      console.error('WebSocket 错误:', error)
+      for (const [, pending] of this.pendingPromises) {
+        clearTimeout(pending.timer)
+        pending.reject(new Error('WebSocket error'))
+      }
+      this.pendingPromises.clear()
+    }
     this.ws.onmessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data)
       console.log('收到响应:', data)

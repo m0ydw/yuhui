@@ -155,13 +155,16 @@ export function addCursorEvent(board: Board, ctx: CanvasRenderingContext2D) {
   myWebsocketClient.on('whoJoins', addUser)
   // 删除用户
   myWebsocketClient.on('whoExit', delUser)
+  // 被踢出用户：不触发 whoExit，所以这里手动删除光标
+  myWebsocketClient.on('userKicked', delUser)
   // 用户移动
   myWebsocketClient.on('someoneMove', userMove)
 }
 // 移除此类事件监听
 export function delCursorEvent() {
   myWebsocketClient.off('whoJoins', addUser)
-  myWebsocketClient.off('CursorExit', delUser)
+  myWebsocketClient.off('whoExit', delUser)
+  myWebsocketClient.off('userKicked', delUser)
   myWebsocketClient.off('someoneMove', userMove)
 }
 // 渲染所有人的位置（参数为true强制渲染）

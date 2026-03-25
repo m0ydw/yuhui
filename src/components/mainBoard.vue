@@ -6,6 +6,13 @@
     <canvas id="cursorCanvas"></canvas>
     <canvas id="otherCursorCanvas"></canvas>
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
+    <roomUsersNav
+      v-if="boardReady && roomName"
+      :room-name="roomName"
+      :room-id="roomIdStr"
+      :homeowner="homeowner"
+      :users="onlineUsers"
+    />
     <boardSection @select="handleSectionEmit"></boardSection>
     <!-- 弹窗 -->
 
@@ -17,6 +24,7 @@ import flexPop from './flexPop.vue'
 import boardSection from './boardSection.vue'
 import scale from './toolBar/scale.vue'
 import { ref, shallowRef, onMounted, onUnmounted, type Ref, } from 'vue'
+import roomUsersNav from '@/components/roomUsersNav.vue'
 import {
   canvasPointer,//捕获指针至canvas
   type Board, type Stroke,
@@ -25,12 +33,14 @@ import {
   cursorRender,
   connectCursor,
   addCursorEvent,
+  delCursorEvent,
   renderOtherCursor,
   cursorMoveSend,
   myWebsocketClient,//websocket实例
   changeUserId,
   getUserId,
   addUsers,//初始化其他用户的cursor
+  addBaseMessager,
 } from '@/models'
 import {
   newStrokeFlow,//新建用户队列
@@ -42,6 +52,7 @@ import {
 import { useRoute, useRouter } from 'vue-router'
 import useClientStore from '@/stores/clientStores'
 import userDataStore from '@/stores/userDataStores'
+import { URLSERVER } from '@/api'
 const userDataStoreTEAMPLATE = userDataStore()
 const router = useRouter()
 const route = useRoute()
@@ -64,6 +75,15 @@ const windowVw = ref()
 const windowVh = ref()
 let boardData: Board | undefined = undefined
 let boardReady = ref(false)
+const roomIdStr = ref('')
+const roomName = ref('')
+const homeowner = ref('')
+const onlineUsers = ref<{ userId: string; name: string; avatar: string }[]>([])
+let onWhoJoinsHandler: ((d: any) => void) | null = null
+let onWhoExitHandler: ((d: any) => void) | null = null
+let onUserKickedHandler: ((d: any) => void) | null = null
+let onKickedOutHandler: ((d: any) => void) | null = null
+let removeMainBoardEvent: null | (() => void) = null
 //清理函数
 let cleanup: (() => void) | null = null
 // 延迟获取store实例，避免在Pinia挂载前使用
@@ -74,31 +94,91 @@ onMounted(async () => {
   await router.isReady()
   const roomId = route.query.roomId
   if (roomId) {
+    roomIdStr.value = roomId.toString()
     //先进入多人
     myWebsocketClient.disconnect()
     changeUserId(await myWebsocketClient.connect('draw'))
     //尝试加入对应room
     myWebsocketClient.send(sendIAmJoin(roomId.toString(), getUserId()))
     //等待服务器响应
-    const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
-    console.log('响应', joinRes)
-    others = joinRes.data.others
-    History = joinRes.data.history
-    otherCursors = joinRes.data.otherCursors
-    //头像存储
-    userDataStoreTEAMPLATE.setUSERS(joinRes.data.allAvatar)
-    switch (joinRes.data.status) {
-      case true:
-        console.log('连接成功')
-        break
+    try {
+      const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
+      console.log('响应', joinRes)
+      others = joinRes.data.others
+      History = joinRes.data.history
+      otherCursors = joinRes.data.otherCursors
 
-      case false:
-        console.log('连接失败')
-        //直接踢出多人状态
-        break
+      roomName.value = joinRes.data.roomName || ''
+      homeowner.value = joinRes.data.homeowner || ''
+
+      //头像存储（其他用户头像等）
+      userDataStoreTEAMPLATE.setUSERS(joinRes.data.allAvatar || [])
+
+      // 初始化在线用户列表（包含自己）
+      const onlineIds: string[] = [getUserId(), ...(joinRes.data.others || [])]
+      const avatarArr: { userkey: string; avatar: string; name: string }[] = Array.isArray(joinRes.data.allAvatar)
+        ? joinRes.data.allAvatar
+        : []
+      const avatarMap = new Map(avatarArr.map((a) => [a.userkey, a]))
+      onlineUsers.value = onlineIds
+        .map((id) => {
+          const info = avatarMap.get(id)
+          if (!info) return null
+          return {
+            userId: id,
+            name: info.name,
+            avatar: `${URLSERVER}${info.avatar}?t=${Date.now()}`,
+          }
+        })
+        .filter(Boolean) as any[]
+
+      // 初始化事件监听（更新导航栏在线用户列表）
+      onWhoJoinsHandler =
+        onWhoJoinsHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          if (onlineUsers.value.some((u) => u.userId === d.user)) return
+          onlineUsers.value.push({
+            userId: d.user,
+            name: d.name || d.user,
+            avatar: `${URLSERVER}${d.hisAvatar || '/uploads/avatar/No-avatar.jpg'}?t=${Date.now()}`,
+          })
+        })
+
+      onWhoExitHandler =
+        onWhoExitHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          onlineUsers.value = onlineUsers.value.filter((u) => u.userId !== d.user)
+        })
+
+      onUserKickedHandler =
+        onUserKickedHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          onlineUsers.value = onlineUsers.value.filter((u) => u.userId !== d.user)
+        })
+
+      onKickedOutHandler =
+        onKickedOutHandler ||
+        (() => {
+          addBaseMessager('您已被请出该房间')
+          router.replace({ name: 'allRoom' })
+        })
+
+      myWebsocketClient.on('whoJoins', onWhoJoinsHandler)
+      myWebsocketClient.on('whoExit', onWhoExitHandler)
+      myWebsocketClient.on('userKicked', onUserKickedHandler)
+      myWebsocketClient.on('kickedOut', onKickedOutHandler)
+
+      hasPlayer = true
+    } catch (e: any) {
+      addBaseMessager(e?.message || '无法加入房间')
+      hasPlayer = false
     }
-    //成功发送
-    hasPlayer = true
   } else {
     //单人
   }
@@ -142,7 +222,7 @@ onMounted(async () => {
       boardData.initBoard(History, ctx.value, canvas.value)
 
     //挂载监听
-    addMainBoardEvent(myWebsocketClient, userQueue)
+    removeMainBoardEvent = addMainBoardEvent(myWebsocketClient, userQueue)
 
     //取消引用释放内存
     others = null
@@ -212,6 +292,13 @@ onMounted(async () => {
 onUnmounted(() => {
   cleanup?.()
   clientStore?.setFlow(null)
+  removeMainBoardEvent?.()
+  removeMainBoardEvent = null
+  delCursorEvent()
+  if (onWhoJoinsHandler) myWebsocketClient.off('whoJoins', onWhoJoinsHandler)
+  if (onWhoExitHandler) myWebsocketClient.off('whoExit', onWhoExitHandler)
+  if (onUserKickedHandler) myWebsocketClient.off('userKicked', onUserKickedHandler)
+  if (onKickedOutHandler) myWebsocketClient.off('kickedOut', onKickedOutHandler)
 })
 //cursorcanvas初始化
 

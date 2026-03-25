@@ -40,8 +40,13 @@ const positionStyle = computed(() => ({
 //改变父容器位置
 const changePosition = (px: number, py: number) => {
   //限制不超出屏幕
+  // 避让房间导航栏（roomUsersNav 收起/伸出都会更新该 CSS 变量）
+  const navHeightRaw = getComputedStyle(document.documentElement).getPropertyValue('--room-users-nav-height')
+  const navHeight = Number.parseFloat(navHeightRaw)
+  const minTop = Number.isFinite(navHeight) ? navHeight + 6 : 0
+
   px = Math.max(Math.min(px, window.innerWidth - container.w), 0)
-  py = Math.max(Math.min(py, window.innerHeight - container.h), 0)
+  py = Math.max(Math.min(py, window.innerHeight - container.h), minTop)
   position.value.x = px
   position.value.y = py
 }
@@ -54,7 +59,26 @@ onMounted(() => {
     container.h = main.value.offsetHeight
     // 初始位置
     position.value.x = window.innerWidth * 0.5 - container.w * 0.5
+    const navHeightRaw = getComputedStyle(document.documentElement).getPropertyValue('--room-users-nav-height')
+    const navHeight = Number.parseFloat(navHeightRaw)
+    const minTop = Number.isFinite(navHeight) ? navHeight + 6 : 0
+    position.value.y = Math.max(window.innerHeight * 0.5 - container.h * 0.5, minTop)
+
     cleanup = toolBarPointer(move.value, changePosition, position)
+  }
+
+  // 监听导航栏高度变化：伸出时立即把 toolbar 顶到 nav 下方
+  const onNavHeightChange = (e: any) => {
+    const navHeight = Number(e?.detail)
+    const minTop = Number.isFinite(navHeight) ? navHeight + 6 : 0
+    if (position.value.y < minTop) position.value.y = Math.max(minTop, 0)
+  }
+  window.addEventListener('room-users-nav-height-change', onNavHeightChange)
+
+  const oldCleanup = cleanup
+  cleanup = () => {
+    window.removeEventListener('room-users-nav-height-change', onNavHeightChange)
+    oldCleanup?.()
   }
 })
 
