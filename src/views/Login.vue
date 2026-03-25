@@ -1,8 +1,8 @@
 <template>
   <div class="shell">
     <!-- 注册容器 -->
-    <div class="container a-container" :class="{ 'is-txl': isLogin }">
-      <form class="form" @submit.prevent="handleRegister" v-if="!formReg">
+      <div class="container a-container" :class="{ 'is-txl': isLogin }">
+      <form class="form" @submit.prevent="handleRegister" v-if="leftMode === 'register' && !formReg && !forgotVerify">
         <h2 class="form_title title">创建账号</h2>
 
         <div class="form_icons">
@@ -19,7 +19,28 @@
 
         <button :disabled="regButton" class="button">SIGN UP</button>
       </form>
-      <div class="code-box" v-if="formReg">
+      <!-- 忘记密码：输入邮箱 + 新密码 -->
+      <form
+        class="form"
+        @submit.prevent="handleForgotSendCode"
+        v-if="leftMode === 'forgot' && !forgotVerify"
+      >
+        <h2 class="form_title title">忘记密码</h2>
+
+        <div class="form_icons">
+          <i class="iconfont icon-QQ"></i>
+          <i class="iconfont icon-weixin"></i>
+          <i class="iconfont icon-bilibili-line"></i>
+        </div>
+
+        <input v-model="forgotForm.email" class="form_input" placeholder="Email" />
+        <input v-model="forgotForm.password" class="form_input" type="password" placeholder="新密码" />
+        <input v-model="forgotForm.confirm" class="form_input" type="password" placeholder="确认新密码" />
+
+        <button :disabled="forgotSendButtonDisabled" class="button">发送验证码</button>
+      </form>
+
+      <div class="code-box" v-if="formReg || forgotVerify">
         <div class="code-view" @click="" ref="view">
           <div class="code-item" v-for="(item, idx) in 6" :key="idx"
             :class="{ codeActive: idx === code.length && focused }">
@@ -51,7 +72,7 @@
         <input v-model="loginForm.email" class="form_input" placeholder="Email" />
         <input v-model="loginForm.password" class="form_input" type="password" placeholder="Password" />
 
-        <a class="form_link">忘记密码？</a>
+        <a class="form_link" @click="openForgot">忘记密码？</a>
         <button :disabled="loginButton" class="button">SIGN IN</button>
       </form>
     </div>
@@ -79,7 +100,12 @@
         <p class="description">
           没有账号？去注册一个！
         </p>
-        <button class="button" @click="changeForm">SIGN UP</button>
+        <button
+          class="button"
+          @click="() => { leftMode = 'register'; forgotVerify = false; changeForm() }"
+        >
+          SIGN UP
+        </button>
       </div>
     </div>
   </div>
@@ -87,7 +113,16 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
-import { request, type loginData, type realRegData, type regData, setToken, type logFinalData } from '@/api'
+import {
+  request,
+  type loginData,
+  type realRegData,
+  type regData,
+  type forgotData,
+  type realForgotData,
+  setToken,
+  type logFinalData,
+} from '@/api'
 import { addBaseMessager } from '@/models'
 import router from '@/router'
 import { nextTick } from 'vue'
@@ -97,6 +132,10 @@ import { nextTick } from 'vue'
 ====================== */
 //true时为校验验证码的页面
 const formReg = ref(false)
+// 左侧面板模式：注册 or 忘记密码
+const leftMode = ref<'register' | 'forgot'>('register')
+// 忘记密码验证码校验页
+const forgotVerify = ref(false)
 //切换登录注册的动画
 const isLogin = ref(true)
 //切换中为true
@@ -119,12 +158,21 @@ const registerForm = reactive({
   confirm: '11111111111',
 })
 
+const forgotForm = reactive({
+  email: '',
+  password: '',
+  confirm: '',
+})
+
 const code = ref('')
 const focused = ref(true)
 const view = ref()
 const codeInput = ref()
 //允许修改验证码
 const changeInput = ref(true)
+
+// 发送忘记密码验证码按钮禁用状态
+const forgotSendButtonDisabled = ref(false)
 
 const onKeydown = (e: KeyboardEvent) => {
   // 允许控制键
@@ -165,20 +213,53 @@ const onInput = async (e: Event) => {
   focused.value = false
   codeInput.value?.blur()
   //满足六个的时候直接提交检验验证码是否正确
-  let params = { code: code.value, email: registerForm.email }
-  const response = await request<realRegData>('api/realReg', 'POST', params, false)
-  console.log(response.data)
+  const regParams = { code: code.value, email: registerForm.email }
+  const forgotParams = { code: code.value, email: forgotForm.email }
+
+  // 注册验证码校验
+  if (formReg.value) {
+    const response = await request<realRegData>('api/realReg', 'POST', regParams, false)
+    console.log(response.data)
+    // 注册逻辑目前没有自动跳转，这里只让它可继续输入
+    changeInput.value = true
+    focused.value = true
+    codeInput.value?.focus()
+    return
+  }
+
+  // 忘记密码验证码校验
+  if (forgotVerify.value) {
+    const response = await request<realForgotData>('api/realForgot', 'POST', forgotParams, false)
+    if (response.code !== 200 || response.data?.type !== 'finallyForgot') {
+      addBaseMessager(response.data?.status || '验证码错误')
+      changeInput.value = true
+      focused.value = true
+      codeInput.value?.focus()
+      return
+    }
+
+    addBaseMessager('密码重置成功，请登录')
+    forgotVerify.value = false
+    formReg.value = false
+    leftMode.value = 'register'
+    code.value = ''
+    changeInput.value = true
+    focused.value = true
+
+    // 切回登录面板
+    if (!isLogin.value) changeForm()
+  }
 }
 const judgeInput = (e: PointerEvent) => {
   //不可修改或者不是验证码页面时拦截
-  if (!changeInput.value || !formReg.value) return
+  if (!changeInput.value || !(formReg.value || forgotVerify.value)) return
   const target = e.target as Node | null
   if (!target) return
-  if (view.value.contains(target)) {
+  if (view.value && view.value.contains(target)) {
     focused.value = true
     codeInput.value?.focus()
   }
-  else if (!view.value.contains(target)) {
+  else if (view.value && !view.value.contains(target)) {
     focused.value = false
     codeInput.value?.blur()
   }
@@ -241,6 +322,65 @@ async function handleLogin() {
   } else {
     addBaseMessager(response.data.status)
     loginButton.value = false
+  }
+}
+
+// 忘记密码：从登录面板切换到左侧“忘记密码”面板
+function openForgot() {
+  leftMode.value = 'forgot'
+  formReg.value = false
+  forgotVerify.value = false
+  code.value = ''
+  changeInput.value = true
+  focused.value = true
+  forgotSendButtonDisabled.value = false
+
+  // login 面板默认 isLogin=true，切到左侧需要切换一次
+  if (isLogin.value) changeForm()
+}
+
+// 发送“忘记密码”验证码
+async function handleForgotSendCode() {
+  if (forgotSendButtonDisabled.value === true) return
+  forgotSendButtonDisabled.value = true
+
+  if (!forgotForm.email || !emailReg.test(forgotForm.email)) {
+    addBaseMessager('邮箱非法')
+    forgotSendButtonDisabled.value = false
+    return
+  }
+  if (!forgotForm.password || !passwordReg.test(forgotForm.password)) {
+    addBaseMessager('密码仅支持字母、数字与特殊字符，长度8-45')
+    forgotSendButtonDisabled.value = false
+    return
+  }
+  if (forgotForm.password !== forgotForm.confirm) {
+    addBaseMessager('两次密码不一致')
+    forgotSendButtonDisabled.value = false
+    return
+  }
+
+  const params = {
+    email: forgotForm.email,
+    password: forgotForm.password,
+  }
+
+  const response = await request<forgotData>('api/forgot', 'POST', params, false)
+  switch (response.data?.type) {
+    case 'forgotaccess':
+      addBaseMessager('验证码已发送')
+      forgotVerify.value = true
+      code.value = ''
+      changeInput.value = true
+      focused.value = true
+      await nextTick()
+      codeInput.value?.focus()
+      forgotSendButtonDisabled.value = false
+      break
+    default:
+      addBaseMessager(response.data?.status || '发送失败')
+      forgotSendButtonDisabled.value = false
+      break
   }
 }
 //确认注册     发送 验证码

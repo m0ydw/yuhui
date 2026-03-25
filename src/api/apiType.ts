@@ -17,6 +17,16 @@ export interface realRegData {
   status: string
   type: string
 }
+
+export interface forgotData {
+  status: string
+  type: string
+}
+
+export interface realForgotData {
+  status: string
+  type: string
+}
 export interface logFinalData {
   name: string
   createAt: string
