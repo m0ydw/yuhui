@@ -23,6 +23,16 @@ const open = (component, props = {}, canClose = true) => {
   state.props = props
   state.visible = true
   couldClose = canClose
+  return {
+    realExit: () => {
+      state.visible = false
+    }
+  }
+}
+
+// 动态控制是否允许关闭（用于“初始化中”等不可打断场景）
+const setCanClose = (next) => {
+  couldClose = next
 }
 
 const close = () => {
@@ -31,7 +41,7 @@ const close = () => {
   }
 }
 
-defineExpose({ open, close })
+defineExpose({ open, close, setCanClose })
 </script>
 
 <style scoped>

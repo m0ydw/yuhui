@@ -2,9 +2,11 @@
   <div class="createRoom">
     <div class="header">
       <div class="title">创建房间</div>
-      <button class="cls" @click="emit('close')">关闭</button>
+      <button class="cls" :disabled="isReqIng" @click="!isReqIng && emit('close')">
+        关闭
+      </button>
     </div>
-    <div class="body">
+    <div class="body" :class="{ uploading: isReqIng }">
       <div class="side">
         <div class="sideTitle">
           工程
@@ -47,11 +49,11 @@
               <span class="nameTitle">
                 房间名
               </span>
-              <input type="text" class="roomName" v-model="roomName" @input="handleInput">
+              <input type="text" class="roomName" v-model="roomName" :disabled="isReqIng" @input="handleInput">
             </div>
             <div class="roomNumberBox">
               <span class="roomNumberTitle">人数</span>
-              <input type="text" class="roomNumber" @change="handleNumber" value="2">
+              <input type="text" class="roomNumber" :disabled="isReqIng" @change="handleNumber" value="2">
             </div>
 
 
@@ -64,6 +66,7 @@
           </div>
         </div>
       </div>
+      <div v-if="isReqIng" class="initHint">房间初始化中…</div>
     </div>
   </div>
 </template>
@@ -186,6 +189,7 @@ const handleNumber = (e: Event) => {
 }
 //创建房间请求
 import { type createRoomData } from '@/api';
+import { getPopFlex } from '@/models/flexpop/flexpop'
 const isReqIng = ref(false)
 const createRoomAction = async () => {
   isReqIng.value = true
@@ -206,6 +210,9 @@ const createRoomAction = async () => {
     hasStroke = strokes.length > 0
   }
 
+  const popRef = getPopFlex()
+  let closedLocked = false
+
   try {
     // 没有初始化笔画：走原有一次性创建
     if (!hasStroke || !strokes || strokes.length === 0) {
@@ -222,6 +229,12 @@ const createRoomAction = async () => {
       return
     }
 
+    // 分块上传初始化笔画：禁止关闭/打断
+    if (popRef?.value?.setCanClose) {
+      popRef.value.setCanClose(false)
+      closedLocked = true
+    }
+
     const hasInvalidStroke = strokes.some(item => item === undefined || item === null);
     if (hasInvalidStroke) {
       throw new Error("白板数据包含无效内容，请检查后重试");
@@ -230,6 +243,14 @@ const createRoomAction = async () => {
     // 分块上传初始化笔画：避免后端请求体超过 2MB
     const encoder = new TextEncoder()
     const byteLen = (s: string) => encoder.encode(s).length
+    //
+    const totalStrokeJson = JSON.stringify(strokes)
+    const totalBytes = byteLen(totalStrokeJson)
+    console.log('📦 白板总条数：', strokes.length)
+    console.log('📦 白板总大小：', (totalBytes / 1024).toFixed(2) + ' KB')
+
+
+    //
     const overheadBytes = byteLen(
       JSON.stringify({
         roomId: roomId.value,
@@ -317,6 +338,7 @@ const createRoomAction = async () => {
     addBaseMessager('创建房间失败')
   } finally {
     isReqIng.value = false
+    if (closedLocked && popRef?.value?.setCanClose) popRef.value.setCanClose(true)
   }
 }
 </script>
@@ -328,6 +350,7 @@ const createRoomAction = async () => {
   background: #fff;
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
   display: flex;
   flex-direction: column;
@@ -350,6 +373,22 @@ const createRoomAction = async () => {
   color: #999;
 }
 
+.cls:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.initHint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 14px;
+  text-align: center;
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
 .title {
   text-align: center;
   font-weight: 600;
@@ -360,6 +399,10 @@ const createRoomAction = async () => {
   display: grid;
   grid-template-columns: 280px 1fr;
   min-height: 0;
+}
+
+.body.uploading {
+  pointer-events: none;
 }
 
 .side {

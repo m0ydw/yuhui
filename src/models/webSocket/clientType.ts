@@ -8,11 +8,12 @@ export class WebSocketClient {
   public ws: WebSocket | null = null
   public url: string
   private userId: string | null = null
+  private connectionToken = 0
 
   // 核心改进：增加两个内部管理器
   private pendingPromises = new Map<
     string,
-    { resolve: Function; reject: Function; timer: ReturnType<typeof setTimeout> }
+    { resolve: Function; reject: Function; timer: ReturnType<typeof setTimeout>; token: number }
   >()
   private specialHandlers = new Map<string, (data: any) => boolean>() // 返回 true 则不再分发
   private isConnecting = false //正在连接？
@@ -24,11 +25,27 @@ export class WebSocketClient {
     this.url = url
   }
 
+  private clearPendingPromises(reason: string, token?: number) {
+    for (const [, pending] of this.pendingPromises) {
+      if (token !== undefined && pending.token !== token) continue
+      clearTimeout(pending.timer)
+      pending.reject(new Error(reason))
+    }
+    if (token === undefined) this.pendingPromises.clear()
+    else {
+      // 只清理指定 token 的等待项
+      for (const [k, pending] of this.pendingPromises) {
+        if (pending.token === token) this.pendingPromises.delete(k)
+      }
+    }
+  }
+
   /**
    * 新增：可复用的消息等待机制
    */
   waitForMessage(type: string, timeout = 10000): Promise<any> {
     return new Promise((resolve, reject) => {
+      const token = this.connectionToken
       // 如果同一个 type 已经在等待，先取消旧的等待，避免旧 timer 后续触发“幽灵超时”
       const existed = this.pendingPromises.get(type)
       if (existed) {
@@ -52,6 +69,7 @@ export class WebSocketClient {
           reject(err)
         },
         timer,
+        token,
       })
     })
   }
@@ -72,6 +90,8 @@ export class WebSocketClient {
     if (this.isConnecting) {
       return Promise.reject(new Error('正在连接中，请稍候'))
     }
+    this.isConnecting = true
+    const token = ++this.connectionToken
 
     // 使用新机制等待 user-assigned
     const userAssignedPromise = this.waitForMessage('user-assigned').then((data) => {
@@ -89,16 +109,16 @@ export class WebSocketClient {
       ticket: data.data.ticket,
       type: connType,
     })
-    this.ws = new WebSocket(`${this.url}?${params.toString()}`)
-    this.ws.onopen = () => console.log('WebSocket 已连接')
-    this.ws.onclose = (event) => {
+    const ws = new WebSocket(`${this.url}?${params.toString()}`)
+    this.ws = ws
+    ws.onopen = () => console.log('WebSocket 已连接')
+    ws.onclose = (event) => {
+      const isCurrent = this.ws === ws && this.connectionToken === token
       console.log(event.code, event.reason)
-      // 连接断开时清理等待中的 Promise，避免后续 timer 回调再次触发
-      for (const [, pending] of this.pendingPromises) {
-        clearTimeout(pending.timer)
-        pending.reject(new Error(event.reason || 'WebSocket disconnected'))
-      }
-      this.pendingPromises.clear()
+      // 旧连接 close 也要清理它自己 token 的等待项，但不做 UI 弹窗，避免误导
+      this.clearPendingPromises(event.reason || 'WebSocket disconnected', token)
+      if (!isCurrent) return
+
       switch (event.code) {
         case 1009:
         case 1010:
@@ -111,16 +131,17 @@ export class WebSocketClient {
         case 1006:
           pop?.value.open(unknowErr)
       }
+      this.isConnecting = false
     }
-    this.ws.onerror = (error) => {
+    ws.onerror = (error) => {
+      const isCurrent = this.ws === ws && this.connectionToken === token
       console.error('WebSocket 错误:', error)
-      for (const [, pending] of this.pendingPromises) {
-        clearTimeout(pending.timer)
-        pending.reject(new Error('WebSocket error'))
-      }
-      this.pendingPromises.clear()
+      this.clearPendingPromises('WebSocket error', token)
+      if (!isCurrent) return
+      this.isConnecting = false
     }
-    this.ws.onmessage = (event: MessageEvent) => {
+    ws.onmessage = (event: MessageEvent) => {
+      if (this.ws !== ws || this.connectionToken !== token) return
       const data = JSON.parse(event.data)
       console.log('收到响应:', data)
 
@@ -143,7 +164,12 @@ export class WebSocketClient {
       typeListeners?.forEach((callback) => callback(data))
     }
 
-    return userAssignedPromise
+    try {
+      return await userAssignedPromise
+    } finally {
+      // connect 成功后/失败后都释放连接状态
+      if (this.connectionToken === token) this.isConnecting = false
+    }
   }
 
   // 以下所有方法保持不变，完全兼容！
@@ -173,10 +199,16 @@ export class WebSocketClient {
   }
 
   disconnect(): void {
-    if (this.ws) {
-      this.ws.close()
-      this.ws = null
+    const ws = this.ws
+    if (!ws) return
+    this.ws = null
+    this.clearPendingPromises('WebSocket disconnected')
+    try {
+      ws.close()
+    } catch {
+      // ignore
     }
+    this.isConnecting = false
   }
 
   getUserId() {

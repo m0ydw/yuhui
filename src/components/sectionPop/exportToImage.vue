@@ -49,13 +49,13 @@ const downloadImage = () => {
   border: 1px solid #ccc;
   border-radius: 8px;
   padding: 16px;
-  background-color: #f9f9f9;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background-color: rgba(230, 235, 240, 0.9);
+  box-shadow: 0 6px 12px rgba(100, 110, 120, 0.12);
 }
 
 .imageRes {
-  width: 100%;
-  height: 100%;
+  width: 80%;
+  height: 80%;
   object-fit: contain;
   margin-bottom: 16px;
 }

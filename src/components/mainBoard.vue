@@ -6,13 +6,8 @@
     <canvas id="cursorCanvas"></canvas>
     <canvas id="otherCursorCanvas"></canvas>
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
-    <roomUsersNav
-      v-if="boardReady && roomName"
-      :room-name="roomName"
-      :room-id="roomIdStr"
-      :homeowner="homeowner"
-      :users="onlineUsers"
-    />
+    <roomUsersNav v-if="boardReady && roomName" :room-name="roomName" :room-id="roomIdStr" :homeowner="homeowner"
+      :users="onlineUsers" />
     <boardSection @select="handleSectionEmit"></boardSection>
     <!-- 弹窗 -->
 
@@ -25,6 +20,7 @@ import boardSection from './boardSection.vue'
 import scale from './toolBar/scale.vue'
 import { ref, shallowRef, onMounted, onUnmounted, type Ref, } from 'vue'
 import roomUsersNav from '@/components/roomUsersNav.vue'
+import roomInitLoading from '@/components/sectionPop/roomInitLoading.vue'
 import {
   canvasPointer,//捕获指针至canvas
   type Board, type Stroke,
@@ -84,11 +80,15 @@ let onWhoExitHandler: ((d: any) => void) | null = null
 let onUserKickedHandler: ((d: any) => void) | null = null
 let onKickedOutHandler: ((d: any) => void) | null = null
 let removeMainBoardEvent: null | (() => void) = null
+let onJoinStatusInitHandler: ((d: any) => void) | null = null
+let onJoinStatusChunkHandler: ((d: any) => void) | null = null
+let onJoinStatusDoneHandler: ((d: any) => void) | null = null
 //清理函数
 let cleanup: (() => void) | null = null
 // 延迟获取store实例，避免在Pinia挂载前使用
 let clientStore: ReturnType<typeof useClientStore> | null = null
 //画板初始化
+
 onMounted(async () => {
   //确定模式
   await router.isReady()
@@ -102,25 +102,122 @@ onMounted(async () => {
     myWebsocketClient.send(sendIAmJoin(roomId.toString(), getUserId()))
     //等待服务器响应
     try {
-      const joinRes = await myWebsocketClient.waitForMessage('JoinStatus')
-      console.log('响应', joinRes)
-      others = joinRes.data.others
-      History = joinRes.data.history
-      otherCursors = joinRes.data.otherCursors
+      const popRef = getPopFlex()
+      const pop = popRef?.value?.open(roomInitLoading, { message: '房间初始化中' }, false)
 
-      roomName.value = joinRes.data.roomName || ''
-      homeowner.value = joinRes.data.homeowner || ''
+      // 提前挂载用户增减监听，避免 JoinStatus 分片期间错过 whoJoins
+      onWhoJoinsHandler =
+        onWhoJoinsHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          if (onlineUsers.value.some((u) => u.userId === d.user)) return
+          onlineUsers.value.push({
+            userId: d.user,
+            name: d.name || d.user,
+            avatar: `${URLSERVER}${d.hisAvatar || '/uploads/avatar/No-avatar.jpg'}?t=${Date.now()}`,
+          })
+        })
+
+      onWhoExitHandler =
+        onWhoExitHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          onlineUsers.value = onlineUsers.value.filter((u) => u.userId !== d.user)
+        })
+
+      onUserKickedHandler =
+        onUserKickedHandler ||
+        ((raw: any) => {
+          const d = raw?.data
+          if (!d?.user) return
+          onlineUsers.value = onlineUsers.value.filter((u) => u.userId !== d.user)
+        })
+
+      onKickedOutHandler =
+        onKickedOutHandler ||
+        (() => {
+          addBaseMessager('您已被请出该房间')
+          router.replace({ name: 'allRoom' })
+        })
+
+      myWebsocketClient.on('whoJoins', onWhoJoinsHandler)
+      myWebsocketClient.on('whoExit', onWhoExitHandler)
+      myWebsocketClient.on('userKicked', onUserKickedHandler)
+      myWebsocketClient.on('kickedOut', onKickedOutHandler)
+
+      const joinRes = await new Promise<{ meta: any; history: Stroke[] }>((resolve, reject) => {
+        let meta: any = null
+        const mergedHistory: Stroke[] = []
+        let done = false
+
+        const cleanup = () => {
+          if (onJoinStatusInitHandler) myWebsocketClient.off('JoinStatusInit', onJoinStatusInitHandler)
+          if (onJoinStatusChunkHandler) myWebsocketClient.off('JoinStatusChunk', onJoinStatusChunkHandler)
+          if (onJoinStatusDoneHandler) myWebsocketClient.off('JoinStatusDone', onJoinStatusDoneHandler)
+          onJoinStatusInitHandler = null
+          onJoinStatusChunkHandler = null
+          onJoinStatusDoneHandler = null
+        }
+
+        const timer = setTimeout(() => {
+          if (done) return
+          done = true
+          cleanup()
+          reject(new Error('房间初始化超时'))
+        }, 30000)
+
+        onJoinStatusInitHandler = (raw: any) => {
+          meta = raw?.data || null
+        }
+
+        onJoinStatusChunkHandler = (raw: any) => {
+          const arr = raw?.data?.strokes
+          if (Array.isArray(arr)) mergedHistory.push(...(arr as Stroke[]))
+        }
+
+        onJoinStatusDoneHandler = (raw: any) => {
+          if (done) return
+          //关闭弹窗
+          pop.realExit()
+          done = true
+          clearTimeout(timer)
+          cleanup()
+
+          if (!meta?.status) {
+            reject(new Error('加入房间失败：初始化数据异常'))
+            return
+          }
+
+          resolve({ meta, history: mergedHistory })
+        }
+
+        myWebsocketClient.on('JoinStatusInit', onJoinStatusInitHandler)
+        myWebsocketClient.on('JoinStatusChunk', onJoinStatusChunkHandler)
+        myWebsocketClient.on('JoinStatusDone', onJoinStatusDoneHandler)
+      })
+
+      // 结束 loading mask，允许用户继续操作
+      popRef?.value?.close()
+
+      others = joinRes.meta.others
+      History = joinRes.history
+      otherCursors = joinRes.meta.otherCursors
+
+      roomName.value = joinRes.meta.roomName || ''
+      homeowner.value = joinRes.meta.homeowner || ''
 
       //头像存储（其他用户头像等）
-      userDataStoreTEAMPLATE.setUSERS(joinRes.data.allAvatar || [])
+      userDataStoreTEAMPLATE.setUSERS(joinRes.meta.allAvatar || [])
 
       // 初始化在线用户列表（包含自己）
-      const onlineIds: string[] = [getUserId(), ...(joinRes.data.others || [])]
-      const avatarArr: { userkey: string; avatar: string; name: string }[] = Array.isArray(joinRes.data.allAvatar)
-        ? joinRes.data.allAvatar
+      const onlineIds: string[] = [getUserId(), ...(joinRes.meta.others || [])]
+      const avatarArr: { userkey: string; avatar: string; name: string }[] = Array.isArray(joinRes.meta.allAvatar)
+        ? joinRes.meta.allAvatar
         : []
       const avatarMap = new Map(avatarArr.map((a) => [a.userkey, a]))
-      onlineUsers.value = onlineIds
+      const computedUsers = onlineIds
         .map((id) => {
           const info = avatarMap.get(id)
           if (!info) return null
@@ -131,6 +228,14 @@ onMounted(async () => {
           }
         })
         .filter(Boolean) as any[]
+
+      // 合并：避免初始化分片期间 whoJoins 已经把人 push 进列表后被覆盖
+      const userMap = new Map((onlineUsers.value || []).map((u) => [u.userId, u]))
+      computedUsers.forEach((u) => {
+        if (!u) return
+        userMap.set(u.userId, u)
+      })
+      onlineUsers.value = Array.from(userMap.values())
 
       // 初始化事件监听（更新导航栏在线用户列表）
       onWhoJoinsHandler =
@@ -176,6 +281,8 @@ onMounted(async () => {
 
       hasPlayer = true
     } catch (e: any) {
+      // 出错时关闭 loading mask，避免卡死
+      getPopFlex()?.value?.close()
       addBaseMessager(e?.message || '无法加入房间')
       hasPlayer = false
     }
@@ -295,6 +402,12 @@ onUnmounted(() => {
   removeMainBoardEvent?.()
   removeMainBoardEvent = null
   delCursorEvent()
+  if (onJoinStatusInitHandler) myWebsocketClient.off('JoinStatusInit', onJoinStatusInitHandler)
+  if (onJoinStatusChunkHandler) myWebsocketClient.off('JoinStatusChunk', onJoinStatusChunkHandler)
+  if (onJoinStatusDoneHandler) myWebsocketClient.off('JoinStatusDone', onJoinStatusDoneHandler)
+  onJoinStatusInitHandler = null
+  onJoinStatusChunkHandler = null
+  onJoinStatusDoneHandler = null
   if (onWhoJoinsHandler) myWebsocketClient.off('whoJoins', onWhoJoinsHandler)
   if (onWhoExitHandler) myWebsocketClient.off('whoExit', onWhoExitHandler)
   if (onUserKickedHandler) myWebsocketClient.off('userKicked', onUserKickedHandler)
