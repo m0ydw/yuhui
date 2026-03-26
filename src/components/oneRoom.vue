@@ -13,6 +13,15 @@
           </span>
         </Transition>
       </div>
+      <div class="willClose" v-if="willDel && willDel.on">
+        <span class="label">将于</span>
+        <Transition name="num-pop" mode="out-in">
+          <span :key="willDel.count" class="num-value">
+            {{ willDel.count }}
+          </span>
+        </Transition>
+        <span class="label afterlabel">秒后关闭</span>
+      </div>
     </div>
 
     <button :disabled="entring" class="enter" :class="{ 'enter-disabled': entring }" @click="enter">进入</button>
@@ -20,15 +29,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, type Reactive, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { getUserId, type roomState } from '@/models';
 import { request } from '@/api';
 import { addBaseMessager } from '@/models';
 const router = useRouter()
-
+const willDel = computed(() =>
+  props.timeMap.get(props.roomData.roomId)
+)
 interface Prop {
   roomData: roomState
+  timeMap: Reactive<Map<string, { on: boolean; count: number }>>
 }
 
 const props = defineProps<Prop>()
@@ -103,8 +115,19 @@ async function enter() {
   align-items: center;
 }
 
+.willClose {
+  font-size: 13px;
+  color: #888;
+  display: flex;
+  align-items: center;
+}
+
 .label {
   margin-right: 4px;
+}
+
+.afterlabel {
+  margin-left: 4px;
 }
 
 .num-value {

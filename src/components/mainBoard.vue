@@ -8,15 +8,14 @@
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
     <roomUsersNav v-if="boardReady && roomName" :room-name="roomName" :room-id="roomIdStr" :homeowner="homeowner"
       :users="onlineUsers" />
-    <boardSection @select="handleSectionEmit"></boardSection>
     <!-- 弹窗 -->
-
+    <toolBar :buttonFunction="handleSectionEmit"></toolBar>
   </div>
 </template>
 
 <script setup lang="ts">
+import toolBar from './toolBar.vue'
 import flexPop from './flexPop.vue'
-import boardSection from './boardSection.vue'
 import scale from './toolBar/scale.vue'
 import { ref, shallowRef, onMounted, onUnmounted, type Ref, } from 'vue'
 import roomUsersNav from '@/components/roomUsersNav.vue'
@@ -105,7 +104,7 @@ onMounted(async () => {
       const popRef = getPopFlex()
       const pop = popRef?.value?.open(roomInitLoading, { message: '房间初始化中' }, false)
 
-      // 提前挂载用户增减监听，避免 JoinStatus 分片期间错过 whoJoins
+      // #region 提前挂载用户增减监听，避免 JoinStatus 分片期间错过 whoJoins
       onWhoJoinsHandler =
         onWhoJoinsHandler ||
         ((raw: any) => {
@@ -197,10 +196,8 @@ onMounted(async () => {
         myWebsocketClient.on('JoinStatusChunk', onJoinStatusChunkHandler)
         myWebsocketClient.on('JoinStatusDone', onJoinStatusDoneHandler)
       })
-
-      // 结束 loading mask，允许用户继续操作
-      popRef?.value?.close()
-
+      // #endregion
+      // #region 初始化在线状态
       others = joinRes.meta.others
       History = joinRes.history
       otherCursors = joinRes.meta.otherCursors
@@ -236,8 +233,8 @@ onMounted(async () => {
         userMap.set(u.userId, u)
       })
       onlineUsers.value = Array.from(userMap.values())
-
-      // 初始化事件监听（更新导航栏在线用户列表）
+      // #endregion
+      // #region 挂载导航栏交互事件
       onWhoJoinsHandler =
         onWhoJoinsHandler ||
         ((raw: any) => {
@@ -278,7 +275,7 @@ onMounted(async () => {
       myWebsocketClient.on('whoExit', onWhoExitHandler)
       myWebsocketClient.on('userKicked', onUserKickedHandler)
       myWebsocketClient.on('kickedOut', onKickedOutHandler)
-
+      // #endregion
       hasPlayer = true
     } catch (e: any) {
       // 出错时关闭 loading mask，避免卡死
@@ -289,7 +286,7 @@ onMounted(async () => {
   } else {
     //单人
   }
-  //
+  //#region 初始化画板显示内容
   canvas.value = document.getElementById('drawboard')
   //核心逻辑
   if (canvas.value) {
@@ -338,10 +335,9 @@ onMounted(async () => {
 
 
   }
+  //#endregion
 
-
-  /*          --------------------cursorCanvas初始化 ------------------------------                   */
-
+  // #region  cursorCanvas初始化
   let cursorCanvas = document.getElementById('cursorCanvas') as HTMLCanvasElement
   let cursorCtx: CanvasRenderingContext2D
   if (cursorCanvas) {
@@ -367,8 +363,12 @@ onMounted(async () => {
     }
 
   )
+  // #endregion
 
-  /*          --------------------otherCursorCanvas初始化 ------------------------------                   */
+
+  // #region 缩放时保证渲染
+
+
   let otherCursorCanvas = document.getElementById('otherCursorCanvas') as HTMLCanvasElement
   let otherCursorCtx: CanvasRenderingContext2D
   if (otherCursorCanvas) {
@@ -392,9 +392,9 @@ onMounted(async () => {
   //取消引用释放内存
   otherCursors = null
 
+  // #endregion
 
 })
-
 //画板结束时
 onUnmounted(() => {
   cleanup?.()
@@ -413,8 +413,10 @@ onUnmounted(() => {
   if (onUserKickedHandler) myWebsocketClient.off('userKicked', onUserKickedHandler)
   if (onKickedOutHandler) myWebsocketClient.off('kickedOut', onKickedOutHandler)
 })
-//cursorcanvas初始化
 
+
+
+// #region  cursorcanvas初始化
 
 
 //scale子组件缩放使用的函数
@@ -428,7 +430,11 @@ import saveBoard from './sectionPop/saveBoard.vue'
 import loadBoard from './sectionPop/loadBoard.vue'
 import clearBoard from './sectionPop/clearBoard.vue'
 import { getPopFlex } from '@/models/flexpop/flexpop'
+//button需要的函数
 const handleSectionEmit = (key: string) => {
+  //弹窗组件
+  console.log(key)
+
   let popRef = getPopFlex()
   if (popRef === null) return
   switch (key) {
@@ -436,6 +442,7 @@ const handleSectionEmit = (key: string) => {
       popRef.value.open(saveBoard, { boardData: boardData! })
       break
     case 'load':
+      if (hasPlayer) { addBaseMessager('多人禁用加载'); return }
       popRef.value.open(loadBoard, {
         boardData: boardData!,
         ctx: ctx.value,
@@ -444,7 +451,6 @@ const handleSectionEmit = (key: string) => {
       })
       break
     case 'export':
-      console.log(11)
       popRef.value.open(exportToImage, { boardData: boardData! })
       break
     case 'clear':
@@ -464,6 +470,7 @@ const handleSectionEmit = (key: string) => {
       break
   }
 }
+// #endregion
 
 </script>
 

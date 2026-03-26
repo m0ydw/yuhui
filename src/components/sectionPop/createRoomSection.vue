@@ -333,9 +333,9 @@ const createRoomAction = async () => {
 
     addBaseMessager('创建成功')
     emit('close')
-  } catch (err) {
+  } catch (err: any) {
     console.error(err)
-    addBaseMessager('创建房间失败')
+    addBaseMessager(err.message)
   } finally {
     isReqIng.value = false
     if (closedLocked && popRef?.value?.setCanClose) popRef.value.setCanClose(true)

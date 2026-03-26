@@ -1,6 +1,5 @@
 <template>
   <div>
-    <toolBar></toolBar>
     <selectBar></selectBar>
     <mainBoard></mainBoard>
     <button class="chat-toggle" v-if="roomId" @click="toggleChat">
@@ -47,4 +46,3 @@ function toggleChat() {
   box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
 }
 </style>
-

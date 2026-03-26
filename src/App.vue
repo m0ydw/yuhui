@@ -1,9 +1,10 @@
 <template>
-
-  <router-view />
-  <flexPop ref="popRef"></flexPop>
-  <button @click="refresh"></button>
-  <message></message>
+  <div class="app-wrapper">
+    <router-view />
+    <flexPop ref="popRef"></flexPop>
+    <button @click="refresh"></button>
+    <message></message>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -35,5 +36,10 @@ body,
 input,
 textarea {
   user-select: auto;
+}
+
+.app-wrapper {
+  min-width: 800px;
+  height: 100%;
 }
 </style>

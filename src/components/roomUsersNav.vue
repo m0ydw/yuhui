@@ -42,7 +42,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch, onUnmounted } from 'vue'
 import { getUserId } from '@/models/webSocket/cilentExample'
 import { getPopFlex } from '@/models/flexpop/flexpop'
 import kickUserConfirm from '@/components/sectionPop/kickUserConfirm.vue'
@@ -101,6 +101,36 @@ function setExpanded(next: boolean) {
     document.documentElement.style.setProperty('--room-users-nav-height', '64px')
   }
 }
+
+onMounted(() => {
+  document.documentElement.style.setProperty('--room-users-nav-height', '64px')
+})
+
+// 2. 新增：点击页面任意地方关闭下拉
+function closeOnClickOutside(e: MouseEvent) {
+  // 获取所有下拉项的 DOM
+  const items = document.querySelectorAll('.avatar-item')
+  let isClickInside = false
+
+  // 判断：点击的是不是 头像/下拉框 内部
+  items.forEach(item => {
+    if (item.contains(e.target as Node)) {
+      isClickInside = true
+    }
+  })
+
+  // 点击外面 → 关闭
+  if (!isClickInside) {
+    openedUserId.value = ''
+  }
+}
+onMounted(() => [
+  document.addEventListener('pointerdown', closeOnClickOutside)
+])
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', closeOnClickOutside)
+})
+
 </script>
 
 <style scoped>

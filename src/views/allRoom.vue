@@ -6,7 +6,7 @@
   -->
   <allRoomNav></allRoomNav>
   <TransitionGroup name="list" tag="div" class="container">
-    <oneRoom v-for="value in roomMap.getValues()" :key="value.roomId" :roomData="value"></oneRoom>
+    <oneRoom v-for="value in roomMap.getValues()" :key="value.roomId" :roomData="value" :timeMap="timeMap"></oneRoom>
   </TransitionGroup>
   <!-- 当为空时 -->
   <div v-if="roomMap.getValues().length === 0" key="empty-tip" class="empty-state">
@@ -22,15 +22,15 @@ import {
   sendGetAllRoom,
   createAllRoomMap,
   addAllRoomEvent,
-  changeUserId
+  changeUserId,
+  type roomState
 } from '@/models';
 import oneRoom from '@/components/oneRoom.vue';
 import allRoomNav from '@/components/allRoomNav.vue';
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, reactive } from 'vue';
 
 const roomMap = createAllRoomMap()
-
-
+const timeMap = reactive(new Map<string, { on: boolean, count: number }>())
 import { request, type logFinalData, URLSERVER } from '@/api';
 import userDataStore from '@/stores/userDataStores';
 let userdata = userDataStore()
@@ -44,7 +44,7 @@ onMounted(async () => {
   //初始化
   roomMap.roomInIt(Res.data)
   //监听
-  addAllRoomEvent(roomMap)
+  addAllRoomEvent(roomMap, timeMap)
 
   //获取用户的名称和
   const res = await request<logFinalData>('api/auth/tokenLogin', 'GET', {}, false)

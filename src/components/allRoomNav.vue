@@ -3,6 +3,12 @@
     <div class="logo">
       <span class="icon"></span>
       <span class="text">绘图大厅</span>
+      <div class="clientNum">在线人数:<Transition name="num-pop" mode="out-in">
+          <span :key="peopleNum" class="num-value">
+            {{ peopleNum }}
+          </span>
+        </Transition>
+      </div>
     </div>
 
     <div class="actions">
@@ -63,23 +69,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { onMounted } from 'vue';
-import { request, type createRoom } from '@/api';
-import { getToken } from '@/api';
 import { getPopFlex } from '@/models/flexpop/flexpop';
 import createRoomSection from '@/components/sectionPop/createRoomSection.vue';
-import { URLSERVER } from '@/api'
-
+import { addBaseMessager } from '@/models';
 const router = useRouter()
 const inputRoomId = ref('');
 
 
 // 根据 ID 进入房间
 const handleEnterRoom = () => {
-  if (!inputRoomId.value) return alert('请输入房间号');
-
+  if (!inputRoomId.value) { addBaseMessager('请输入房间号'); return };
   const targetId = inputRoomId.value;
   router.push({ name: 'draw', query: { roomId: targetId } })
 };
@@ -114,12 +116,10 @@ const userdata = userDataStore()
 const mydata = userdata.getMyUserData()
 onMounted(() => {
   try {
-
     const createTime = localStorage.getItem('createAt')
     //createat
     if (createTime)
       createAt.value = new Date(createTime).toLocaleString('zh-CN', { timeZone: 'UTC' })
-
   } catch (err) {
 
   }
@@ -158,10 +158,20 @@ const handleInfo = (e: PointerEvent) => {
   Info.value?.setPointerCapture(e.pointerId)
   // 挂载监听
   document.addEventListener('pointerup', listenInfo)
-
-
 }
-
+//人数
+const peopleNum = ref(0)
+import { myWebsocketClient } from '@/models';
+function changePeople(data: any) {
+  const aim = data.data
+  peopleNum.value = aim.num
+}
+onMounted(() => {
+  myWebsocketClient.on('allClientNum', changePeople)
+})
+onUnmounted(() => {
+  myWebsocketClient.off('allClientNum', changePeople)
+})
 </script>
 
 <style scoped>
@@ -189,6 +199,7 @@ const handleInfo = (e: PointerEvent) => {
   align-items: center;
   gap: 8px;
   cursor: default;
+  position: relative;
 }
 
 
@@ -451,5 +462,38 @@ const handleInfo = (e: PointerEvent) => {
   border-color: #409eff;
   color: #409eff;
   background: #f5faff;
+}
+
+.num-pop-enter-active,
+.num-pop-leave-active {
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.num-pop-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.num-pop-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.clientNum {
+  position: absolute;
+  top: 3px;
+  left: 200px;
+  font-size: 16px;
+  white-space: nowrap;
+  font-weight: 700;
+  color: #8c8c8c;
+}
+
+.num-value {
+  margin-left: 4px;
+  font-weight: bold;
+  color: #409eff;
+  display: inline-block;
+  min-width: 10px;
 }
 </style>

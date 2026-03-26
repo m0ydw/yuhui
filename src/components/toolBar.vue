@@ -6,17 +6,19 @@
     <rect-tool></rect-tool>
     <polyline-tool></polyline-tool>
     <ereaser></ereaser>
-    <div class="move" ref="move">
+    <div class="move" ref="move" @pointerdown="moveDown" @pointerup="moveUp">
       <moveTool></moveTool>
     </div>
     <button class="undo-btn" @click="onUndo">撤销</button>
     <button class="redo-btn" @click="onRedo">撤回</button>
+    <boardSection @select="Props.buttonFunction"></boardSection>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { toolBarPointer } from '@/models';
+import boardSection from './boardSection.vue'
 import hand from './toolBar/hand.vue'
 import pen from './toolBar/pen.vue';
 import lineTool from './toolBar/lineTool.vue'
@@ -50,6 +52,8 @@ const changePosition = (px: number, py: number) => {
   position.value.x = px
   position.value.y = py
 }
+
+
 
 onMounted(() => {
   // 初始化store
@@ -94,6 +98,22 @@ function onUndo() {
 function onRedo() {
   clientStore?.getFlow()?.requestRedo()
 }
+//props接收button函数
+interface Prop {
+  buttonFunction: (key: string) => void
+}
+const Props = defineProps<Prop>()
+
+function moveDown() {
+  if (move.value) {
+    move.value.style.cursor = 'grabbing'
+  }
+}
+function moveUp() {
+  if (move.value) {
+    move.value.style.cursor = 'grab'
+  }
+}
 </script>
 
 <style>
@@ -103,6 +123,24 @@ function onRedo() {
   border: 1px solid silver;
   margin: 3px;
   z-index: 10;
+  border-radius: 10px;
+}
+
+.toolBar {
+  display: flex;
+  /* 开启 flex 布局 */
+  justify-content: center;
+  /* 水平居中 */
+  align-items: center;
+  /* 垂直居中 */
+  gap: 5px;
+  /* 元素间距，可根据需要调整 */
+  height: 60px;
+  /* toolbar 高度，可按需修改 */
+  background-color: #f5f5f5;
+  /* 可选背景 */
+  padding: 0 20px;
+  /* 左右内边距 */
 }
 
 
@@ -115,24 +153,33 @@ function onRedo() {
   margin-left: 0px;
 }
 
-.undo-btn {
+.undo-btn,
+.redo-btn {
+  width: 53.33px;
+  height: 33.33px;
   margin-left: 8px;
-  padding: 6px 10px;
-  border: 1px solid #999;
-  background: #fff;
+  padding: 6px 12px;
+  border: 1px solid #dcdfe6;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #606266;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
 }
 
 .undo-btn:hover,
 .redo-btn:hover {
-  background: #f5f5f5;
+  background-color: #f0f7ff;
+  border-color: #409eff;
+  color: #409eff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
 }
 
-.redo-btn {
-  margin-left: 4px;
-  padding: 6px 10px;
-  border: 1px solid #999;
-  background: #fff;
-  cursor: pointer;
+.move {
+  cursor: grab;
 }
 </style>

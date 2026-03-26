@@ -56,9 +56,7 @@ onUnmounted(() => document.removeEventListener('click', closeOnClickOutside));
 
 <style scoped>
 .boardSection {
-  position: fixed;
-  top: 10px;
-  left: 10px;
+  position: relative;
   z-index: 999;
   display: flex;
   flex-direction: column;
@@ -100,24 +98,33 @@ onUnmounted(() => document.removeEventListener('click', closeOnClickOutside));
 }
 
 .menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   padding: 5px 0;
-  min-width: 100px;
+  min-width: 120px;
   border: 1px solid #ebeef5;
-  margin-left: 5px;
+  z-index: 1000;
+  gap: 5px;
 }
 
 .item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 10px 20px;
-  /* 两边留白多一点，因为没有图标了 */
   font-size: 14px;
   color: #606266;
   cursor: pointer;
-  text-align: center;
-  /* 文字居中看起来更整齐 */
   transition: background 0.2s;
+  text-align: center;
 }
 
 .item:hover {
