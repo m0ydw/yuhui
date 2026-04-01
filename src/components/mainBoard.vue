@@ -4,7 +4,7 @@
   <div>
     <canvas width="600" height="600" id="drawboard"></canvas>
     <canvas id="cursorCanvas"></canvas>
-    <canvas id="otherCursorCanvas"></canvas>
+    <canvas id="otherCursorCanvas" v-if="!single"></canvas>
     <scale :board=boardData :ctx=ctx :canvas=canvas v-if="boardReady && boardData" @resize="scaleResize"></scale>
     <roomUsersNav v-if="boardReady && roomName" :room-name="roomName" :room-id="roomIdStr" :homeowner="homeowner"
       :users="onlineUsers" />
@@ -48,6 +48,9 @@ import { useRoute, useRouter } from 'vue-router'
 import useClientStore from '@/stores/clientStores'
 import userDataStore from '@/stores/userDataStores'
 import { URLSERVER } from '@/api'
+import { inject } from 'vue'
+//刷新函数
+const reload = inject<() => void>('reload')
 const userDataStoreTEAMPLATE = userDataStore()
 const router = useRouter()
 const route = useRoute()
@@ -68,6 +71,7 @@ const canvas = shallowRef()
 const ctx = shallowRef()
 const windowVw = ref()
 const windowVh = ref()
+import boardDataStores from '@/stores/boardDataStores'
 let boardData: Board | undefined = undefined
 let boardReady = ref(false)
 const roomIdStr = ref('')
@@ -86,7 +90,11 @@ let onJoinStatusDoneHandler: ((d: any) => void) | null = null
 let cleanup: (() => void) | null = null
 // 延迟获取store实例，避免在Pinia挂载前使用
 let clientStore: ReturnType<typeof useClientStore> | null = null
+let boardStore: ReturnType<typeof boardDataStores> | null = null
 //画板初始化
+
+//单人时关闭otherCorsor
+const single = ref(false)
 
 onMounted(async () => {
   //确定模式
@@ -136,9 +144,18 @@ onMounted(async () => {
 
       onKickedOutHandler =
         onKickedOutHandler ||
-        (() => {
-          addBaseMessager('您已被请出该房间')
-          router.replace({ name: 'allRoom' })
+        ((data: any) => {
+          const aim = data.data
+          console.log(aim)
+          if (aim.code === 7777) {
+            //被踢
+            popRef?.value.open(kickedOut, { title: '您已被请出房间', message: aim.message })
+
+          }
+          else {
+            //房间关闭
+            popRef?.value.open(kickedOut, { title: '房间已关闭', message: aim.message })
+          }
         })
 
       myWebsocketClient.on('whoJoins', onWhoJoinsHandler)
@@ -266,9 +283,18 @@ onMounted(async () => {
 
       onKickedOutHandler =
         onKickedOutHandler ||
-        (() => {
-          addBaseMessager('您已被请出该房间')
-          router.replace({ name: 'allRoom' })
+        ((data: any) => {
+          const aim = data.data
+          console.log(aim)
+          if (aim.code === 7777) {
+            //被踢
+            popRef?.value.open(kickedOut, { title: '您已被请出房间', message: aim.messgae })
+
+          }
+          else {
+            //房间关闭
+            popRef?.value.open(kickedOut, { title: '房间已关闭', message: aim.messgae })
+          }
         })
 
       myWebsocketClient.on('whoJoins', onWhoJoinsHandler)
@@ -285,6 +311,9 @@ onMounted(async () => {
     }
   } else {
     //单人
+    reload!()
+    //重置组件数据状态
+    single.value = true
   }
   //#region 初始化画板显示内容
   canvas.value = document.getElementById('drawboard')
@@ -296,6 +325,9 @@ onMounted(async () => {
     ctx.value = setupHighResolutionCanvas(canvas.value)
     //board实例（增大网格尺寸，减少 tile 边界与重建次数）
     boardData = newBoard(2048, windowVw, windowVh)
+    //store
+    boardStore = boardDataStores()
+    boardStore.setBoard(boardData)
     boardReady.value = true
     //初始化store
     clientStore = useClientStore()
@@ -429,7 +461,9 @@ import exportToImage from './sectionPop/exportToImage.vue'
 import saveBoard from './sectionPop/saveBoard.vue'
 import loadBoard from './sectionPop/loadBoard.vue'
 import clearBoard from './sectionPop/clearBoard.vue'
+import kickedOut from './sectionPop/kickedOut.vue'
 import { getPopFlex } from '@/models/flexpop/flexpop'
+import Message from './messageNotice/message.vue'
 //button需要的函数
 const handleSectionEmit = (key: string) => {
   //弹窗组件

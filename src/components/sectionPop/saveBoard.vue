@@ -2,7 +2,7 @@
   <div class="popRoot">
     <div class="header">
       <div class="title">保存</div>
-      <button class="ghost" @click="emit('close')">关闭</button>
+      <button class="ghost" @click="handleClose">关闭</button>
     </div>
 
     <div class="body">
@@ -63,8 +63,10 @@ import { computed, onMounted, ref } from 'vue'
 import type { Board } from '@/models'
 import type { BoardProjectMeta } from '@/utils/boardProjectStorage'
 import { boardDataToImage, generateProjectId, listBoardProjects, upsertBoardProject, deleteBoardProject } from '@/utils'
+import { getPopFlex } from '@/models/flexpop/flexpop'
+import router from '@/router'
 
-const props = defineProps<{ boardData: Board }>()
+const props = withDefaults(defineProps<{ boardData: Board, code: number }>(), { code: 0 })
 const emit = defineEmits<{ close: [] }>()
 
 const projects = ref<BoardProjectMeta[]>([])
@@ -77,6 +79,18 @@ const busy = ref(false)
 const message = ref('')
 
 const canSave = computed(() => name.value.trim().length > 0 && previewUrl.value.length > 0)
+
+function handleClose() {
+  if (props.code === 0) {
+    emit('close')
+    return
+  } else {
+    const pop = getPopFlex()
+    pop?.value.setCanClose(true)
+    router.push({ name: 'allRoom' })
+    emit('close')
+  }
+}
 
 function formatTime(ts: number) {
   try {

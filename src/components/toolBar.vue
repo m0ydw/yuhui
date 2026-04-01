@@ -72,18 +72,33 @@ onMounted(() => {
   }
 
   // 监听导航栏高度变化：伸出时立即把 toolbar 顶到 nav 下方
-  const onNavHeightChange = (e: any) => {
-    const navHeight = Number(e?.detail)
-    const minTop = Number.isFinite(navHeight) ? navHeight + 6 : 0
-    if (position.value.y < minTop) position.value.y = Math.max(minTop, 0)
-  }
-  window.addEventListener('room-users-nav-height-change', onNavHeightChange)
+  const handleCssVarChange = () => {
+    const navHeightStr = getComputedStyle(document.documentElement)
+      .getPropertyValue('--room-users-nav-height')
+      .trim();
 
-  const oldCleanup = cleanup
+    // 提取数字（例如 "100px" → 100）
+    const navHeight = parseFloat(navHeightStr) || 0;
+
+    // 你原来的业务逻辑 ✅ 完全不变
+    const minTop = Number.isFinite(navHeight) ? navHeight + 6 : 0;
+    if (position.value.y < minTop) position.value.y = Math.max(minTop, 0);
+  };
+
+  // 创建监听器
+  const observer = new MutationObserver(handleCssVarChange);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['style'],
+  });
+
+  // 初始化时立即执行一次（保证初始位置正确）
+  handleCssVarChange();
+  const oldCleanup = cleanup;
   cleanup = () => {
-    window.removeEventListener('room-users-nav-height-change', onNavHeightChange)
-    oldCleanup?.()
-  }
+    observer.disconnect(); // 停止监听 CSS 变量
+    oldCleanup?.();
+  };
 })
 
 //结束
@@ -124,6 +139,7 @@ function moveUp() {
   margin: 3px;
   z-index: 10;
   border-radius: 10px;
+  white-space: nowrap;
 }
 
 .toolBar {

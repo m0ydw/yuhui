@@ -1,7 +1,7 @@
 <template>
   <div class="shell">
     <!-- 注册容器 -->
-      <div class="container a-container" :class="{ 'is-txl': isLogin }">
+    <div class="container a-container" :class="{ 'is-txl': isLogin }">
       <form class="form" @submit.prevent="handleRegister" v-if="leftMode === 'register' && !formReg && !forgotVerify">
         <h2 class="form_title title">创建账号</h2>
 
@@ -20,11 +20,7 @@
         <button :disabled="regButton" class="button">SIGN UP</button>
       </form>
       <!-- 忘记密码：输入邮箱 + 新密码 -->
-      <form
-        class="form"
-        @submit.prevent="handleForgotSendCode"
-        v-if="leftMode === 'forgot' && !forgotVerify"
-      >
+      <form class="form" @submit.prevent="handleForgotSendCode" v-if="leftMode === 'forgot' && !forgotVerify">
         <h2 class="form_title title">忘记密码</h2>
 
         <div class="form_icons">
@@ -39,18 +35,23 @@
 
         <button :disabled="forgotSendButtonDisabled" class="button">发送验证码</button>
       </form>
-
+      <!-- 验证码界面 -->
       <div class="code-box" v-if="formReg || forgotVerify">
+        <div class="title codeTitle">请输入验证码</div>
         <div class="code-view" @click="" ref="view">
           <div class="code-item" v-for="(item, idx) in 6" :key="idx"
-            :class="{ codeActive: idx === code.length && focused }">
+            :class="{ codeActive: idx === code.length && focused, regFalse: regBoolean }">
             {{ code[idx] || '' }}
           </div>
+          <button @click="reSendCode()" :disabled="!reSendBoolean" class="reSend-btn">重新发送
+            <span v-if="!reSendBoolean" class="count-text">{{ `(${countDown})` }}</span>
+          </button>
         </div>
 
-        <input type="text" class="code-input" inputmode="numeric" pattern="[0-9]*" autocomplete="one-time-code"
-          @keydown="onKeydown" @paste.prevent @input="onInput" ref="codeInput">
+        <div class="goBack" @click="goBack">返回</div>
       </div>
+      <input v-if="formReg || forgotVerify" type="text" class="code-input" inputmode="numeric" pattern="[0-9]*"
+        autocomplete="one-time-code" @keydown="onKeydown" @paste.prevent @input="onInput" ref="codeInput">
     </div>
 
     <!-- 登录容器 -->
@@ -72,7 +73,7 @@
         <input v-model="loginForm.email" class="form_input" placeholder="Email" />
         <input v-model="loginForm.password" class="form_input" type="password" placeholder="Password" />
 
-        <a class="form_link" @click="openForgot">忘记密码？</a>
+        <a class="form_link  passwordUnKnown" @click="openForgot">忘记密码？</a>
         <button :disabled="loginButton" class="button">SIGN IN</button>
       </form>
     </div>
@@ -100,10 +101,7 @@
         <p class="description">
           没有账号？去注册一个！
         </p>
-        <button
-          class="button"
-          @click="() => { leftMode = 'register'; forgotVerify = false; changeForm() }"
-        >
+        <button class="button" @click="() => { leftMode = 'register'; forgotVerify = false; changeForm() }">
           SIGN UP
         </button>
       </div>
@@ -112,7 +110,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   request,
   type loginData,
@@ -125,12 +123,13 @@ import {
 } from '@/api'
 import { addBaseMessager } from '@/models'
 import router from '@/router'
-import { nextTick } from 'vue'
+//设备指纹
+import { getDeviceIdSync } from '@/utils/deviceId'
 
 /* ======================
    状态控制
 ====================== */
-//true时为校验验证码的页面
+//true时为注册校验验证码的页面
 const formReg = ref(false)
 // 左侧面板模式：注册 or 忘记密码
 const leftMode = ref<'register' | 'forgot'>('register')
@@ -143,8 +142,30 @@ const animating = ref(false)
 //按钮(true为禁止按)
 const loginButton = ref(false)
 const regButton = ref(false)
+//注册失败控制样式
+const regBoolean = ref(false)
+//注册计时器
+const reSendBoolean = ref(true)
+let reSendTimer: null | number = null
+const countDown = ref(60)
+function startCountDown() {
+  //不会重启倒计时
+  if (reSendTimer) return
+  //开始倒计时
+  reSendBoolean.value = false
+  countDown.value = 60
+  //启动计时器
+  reSendTimer = setInterval(() => {
+    countDown.value--
+    if (countDown.value <= 0) {
+      clearInterval(reSendTimer!)
+      reSendTimer = null
+      reSendBoolean.value = true
+    }
 
+  }, 1000)
 
+}
 // 表单数据
 const loginForm = reactive({
   email: '',
@@ -197,6 +218,7 @@ const onKeydown = (e: KeyboardEvent) => {
 //同步
 const onInput = async (e: Event) => {
   if (!changeInput.value) return
+  if (regBoolean.value) regBoolean.value = false
   const el = e.target as HTMLInputElement
   const next = el.value
 
@@ -224,6 +246,24 @@ const onInput = async (e: Event) => {
     changeInput.value = true
     focused.value = true
     codeInput.value?.focus()
+    switch (response.data.type) {
+      case 'finallyReg':
+        //注册成功
+        addBaseMessager('注册成功')
+        if (!isLogin.value) changeForm()
+        setTimeout(() => { formReg.value = false, code.value = '' }, 500)
+        break
+
+      case 'codeFalse':
+        addBaseMessager(response.data.status)
+        regBoolean.value = true
+        changeInput.value = true
+        focused.value = true
+        codeInput.value?.focus()
+
+        break
+
+    }
     return
   }
 
@@ -232,6 +272,7 @@ const onInput = async (e: Event) => {
     const response = await request<realForgotData>('api/realForgot', 'POST', forgotParams, false)
     if (response.code !== 200 || response.data?.type !== 'finallyForgot') {
       addBaseMessager(response.data?.status || '验证码错误')
+      regBoolean.value = true
       changeInput.value = true
       focused.value = true
       codeInput.value?.focus()
@@ -363,11 +404,13 @@ async function handleForgotSendCode() {
   const params = {
     email: forgotForm.email,
     password: forgotForm.password,
+    deviceId: getDeviceIdSync()
   }
 
   const response = await request<forgotData>('api/forgot', 'POST', params, false)
   switch (response.data?.type) {
     case 'forgotaccess':
+      startCountDown()
       addBaseMessager('验证码已发送')
       forgotVerify.value = true
       code.value = ''
@@ -422,17 +465,19 @@ async function handleRegister() {
   let params = {
     name: registerForm.name,
     email: registerForm.email,
-    password: registerForm.password
+    password: registerForm.password,
+    deviceId: getDeviceIdSync()
   }
 
   const response = await request<regData>('api/reg', 'POST', params, false)
-
   console.log(response.data)
   switch (response.data.type) {
     //成功时
     case 'regaccess':
       //切换下个页面
+      startCountDown()
       formReg.value = true
+      code.value = ''
       addBaseMessager('验证码已发送')
       //按钮可用
       setTimeout(() => {
@@ -445,6 +490,30 @@ async function handleRegister() {
       regButton.value = false
       break;
   }
+
+}
+
+
+async function reSendCode() {
+  if (!reSendBoolean.value || reSendTimer) return
+  startCountDown()
+  if (formReg.value) {
+    await handleRegister()
+  } else {
+    await handleForgotSendCode()
+  }
+
+}
+function goBack() {
+
+  if (formReg.value) {
+    formReg.value = false
+    //若在注册页面
+  } else {
+    forgotVerify.value = false
+    //若在忘记页面
+  }
+
 
 }
 //检测是否有refreshtoken
@@ -717,24 +786,25 @@ body {
 
 /*   code-box */
 .code-box {
-  background-color: #4878e2;
   width: 100%;
   height: 100%;
-  position: relative
+  position: relative;
+  z-index: 1;
+  background-color: #ecf0f3;
 }
 
 .code-input {
   position: absolute;
   left: 100px;
+  z-index: -9;
 }
 
 .code-view {
   width: 350px;
   height: 50px;
   position: absolute;
-  left: 120px;
-  top: 200px;
-  background-color: black;
+  left: 144px;
+  top: 220px;
   white-space: nowrap;
   z-index: 4;
 }
@@ -755,6 +825,68 @@ body {
   overflow: hidden;
   color: #3F86FF;
 
+}
+
+.passwordUnKnown {
+  cursor: pointer
+}
+
+.codeActive {
+  border: 2px solid #3F86FF;
+}
+
+.regFalse {
+  border: 2px solid #ff1f1f;
+  color: #ff1f1f;
+}
+
+.codeTitle {
+  text-align: center;
+  padding-left: 90px;
+  padding-top: 60px;
+}
+
+/* 发送验证码按钮 */
+.reSend-btn {
+  position: relative;
+  left: -120px;
+  top: 120px;
+  background-color: #ecf0f3;
+  border: none;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #3F86FF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 4px 4px 8px rgba(0, 0, 0, 0.08),
+    -4px -4px 8px rgba(255, 255, 255, 0.6);
+}
+
+/* 禁用状态 */
+.reSend-btn:disabled {
+  color: #999;
+  cursor: default;
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.08),
+    inset -2px -2px 5px rgba(255, 255, 255, 0.6);
+}
+
+/* 倒计时文字 */
+.count-text {
+  margin-left: 4px;
+  color: #888;
+  font-size: 13px;
+}
+
+.goBack {
+  display: inline-block;
+  position: relative;
+  left: 520px;
+  top: -111px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: #666;
 }
 
 /* ================= 动画 ================= */

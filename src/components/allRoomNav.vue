@@ -3,6 +3,7 @@
     <div class="logo">
       <span class="icon"></span>
       <span class="text">绘图大厅</span>
+      <div data-v-05f35376="" class="divider"></div>
       <div class="clientNum">在线人数:<Transition name="num-pop" mode="out-in">
           <span :key="peopleNum" class="num-value">
             {{ peopleNum }}
@@ -14,11 +15,7 @@
     <div class="actions">
 
       <div class="search-group">
-        <input type="text" v-model="inputRoomId" placeholder="输入房间ID..." class="search-input"
-          @keyup.enter="handleEnterRoom" />
-        <button class="icon-btn" @click="handleEnterRoom" title="进入房间">
-          ➔
-        </button>
+        <input type="text" v-model="search" placeholder="输入房间名" class="search-input" @input="handleSearch" />
       </div>
 
       <div class="divider"></div>
@@ -33,6 +30,9 @@
 
       <button class="nav-btn danger" @click="handleLogout">
         退出
+      </button>
+      <button class="nav-btn danger" @click="handleRoomClose">
+        关闭房间
       </button>
     </div>
 
@@ -74,21 +74,19 @@ import { useRouter } from 'vue-router';
 import { onMounted } from 'vue';
 import { getPopFlex } from '@/models/flexpop/flexpop';
 import createRoomSection from '@/components/sectionPop/createRoomSection.vue';
-import { addBaseMessager } from '@/models';
+const emit = defineEmits()
 const router = useRouter()
-const inputRoomId = ref('');
+const search = ref()
 
 
 // 根据 ID 进入房间
-const handleEnterRoom = () => {
-  if (!inputRoomId.value) { addBaseMessager('请输入房间号'); return };
-  const targetId = inputRoomId.value;
-  router.push({ name: 'draw', query: { roomId: targetId } })
+const handleSearch = () => {
+  emit('search', search.value)
 };
 
 // 离线
 const handleOffline = () => {
-  router.push({ name: 'draw' })
+  router.push({ name: 'draw', force: true })
 };
 
 // 新建
@@ -102,9 +100,11 @@ const handleCreateRoom = async () => {
 };
 
 // 登出
-const handleLogout = () => {
+const handleLogout = async () => {
   console.log('退出');
-
+  const res = await request('api/auth/logout', 'POST', {}, false)
+  console.log(res)
+  router.push({ name: 'Login' })
 };
 //用户模块
 
@@ -162,9 +162,18 @@ const handleInfo = (e: PointerEvent) => {
 //人数
 const peopleNum = ref(0)
 import { myWebsocketClient } from '@/models';
+import { request } from '@/api';
 function changePeople(data: any) {
   const aim = data.data
   peopleNum.value = aim.num
+}
+//关闭房间
+import closeRoom from './sectionPop/closeRoom.vue';
+const handleRoomClose = async () => {
+  const pop = getPopFlex()
+  if (!pop) return
+  pop.value.open(closeRoom, {})
+
 }
 onMounted(() => {
   myWebsocketClient.on('allClientNum', changePeople)
@@ -185,10 +194,12 @@ onUnmounted(() => {
   /* justify-content: space-between; */
   padding: 0 24px;
   box-sizing: border-box;
-  position: sticky;
+  position: fixed;
   top: 0;
   margin-bottom: 20px;
   gap: 10px;
+  white-space: nowrap;
+  z-index: 99;
 }
 
 .logo {
@@ -364,7 +375,7 @@ onUnmounted(() => {
   grid-auto-rows: auto;
   /* 行高自动适应内容 */
   position: absolute;
-  width: 150px;
+  width: 170px;
   /* 最小宽度（防止太窄） */
   height: auto;
   /* 高度自动适应 */
@@ -480,9 +491,6 @@ onUnmounted(() => {
 }
 
 .clientNum {
-  position: absolute;
-  top: 3px;
-  left: 200px;
   font-size: 16px;
   white-space: nowrap;
   font-weight: 700;

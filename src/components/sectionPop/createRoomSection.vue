@@ -673,4 +673,9 @@ const createRoomAction = async () => {
   margin-top: 20px;
   height: 32px;
 }
+
+.roomNumberTitle {
+  color: #5dbaff;
+  font-weight: 600;
+}
 </style>

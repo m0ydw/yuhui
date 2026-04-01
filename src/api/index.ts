@@ -1,6 +1,6 @@
-export const SERVER: string = `https://localhost:5500/`
-export const WSERVER: string = 'wss://localhost:5500/ws'
-export const URLSERVER: string = `https://localhost:5500`
+export const SERVER: string = import.meta.env.VITE_API_SERVER as string
+export const WSERVER: string = import.meta.env.VITE_API_WS_SERVER as string
+export const URLSERVER: string = import.meta.env.VITE_API_URL_SERVER as string
 import { getToken, refresh } from './token'
 
 interface ApiResponse<T> {

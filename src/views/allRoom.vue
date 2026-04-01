@@ -4,15 +4,17 @@
     2. tag="div" 表示渲染成一个 div 标签
     3. name="list" 对应下方 CSS 的类名前缀
   -->
-  <allRoomNav></allRoomNav>
-  <TransitionGroup name="list" tag="div" class="container">
-    <oneRoom v-for="value in roomMap.getValues()" :key="value.roomId" :roomData="value" :timeMap="timeMap"></oneRoom>
-  </TransitionGroup>
-  <!-- 当为空时 -->
-  <div v-if="roomMap.getValues().length === 0" key="empty-tip" class="empty-state">
-    <div class="empty-icon"></div>
-    <p>当前暂无房间</p>
-    <p class="sub-text">你可以点击右上角新建一个哦~</p>
+  <div class="allRoomMain">
+    <allRoomNav @search="SearchChange"></allRoomNav>
+    <TransitionGroup name="list" tag="div" class="container">
+      <oneRoom v-for="value in searchMap" :key="value.roomId" :roomData="value" :timeMap="timeMap"></oneRoom>
+    </TransitionGroup>
+    <!-- 当为空时 -->
+    <div v-if="roomMap.getValues().length === 0" key="empty-tip" class="empty-state">
+      <div class="empty-icon"></div>
+      <p>当前暂无房间</p>
+      <p class="sub-text">你可以点击右上角新建一个哦~</p>
+    </div>
   </div>
 </template>
 
@@ -27,10 +29,22 @@ import {
 } from '@/models';
 import oneRoom from '@/components/oneRoom.vue';
 import allRoomNav from '@/components/allRoomNav.vue';
-import { ref, onMounted, reactive } from 'vue';
+import { ref, onMounted, reactive, computed } from 'vue';
 
 const roomMap = createAllRoomMap()
 const timeMap = reactive(new Map<string, { on: boolean, count: number }>())
+const searchMap = computed(() => {
+  if (!search.value) {
+    return Array.from(roomMap.getValues())
+  }
+  return Array.from(roomMap.getValues()).filter((item) => item.roomName.includes(search.value))
+})
+const search = ref()
+const SearchChange = (aim: string) => {
+  search.value = aim
+}
+
+
 import { request, type logFinalData, URLSERVER } from '@/api';
 import userDataStore from '@/stores/userDataStores';
 let userdata = userDataStore()
@@ -58,6 +72,10 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.allRoomMain {
+  overflow-y: auto;
+}
+
 .empty-state {
   width: 100%;
   /* 独占一行 */
@@ -95,17 +113,15 @@ onMounted(async () => {
 
 /* 容器样式，给一点内边距，防止动画溢出被截断 */
 .container {
+  flex: 1;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 10px;
-  /* 如果希望房间多了之后能自动换行整齐排列，可以加上 flex */
-  /* display: flex; */
-  /* flex-wrap: wrap; */
+  margin-top: 64px;
 }
 
-/* --- 动画核心 CSS --- */
 
-/* 1. 移动中的动画 (Move)
-   当列表顺序改变，或者有元素被删除导致其他元素需要移动位置时触发
-*/
 .list-move,
 .list-enter-active,
 .list-leave-active {

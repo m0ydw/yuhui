@@ -33,6 +33,13 @@ function roomWillDel(data: any) {
   }
   Aimcount.set(aim.roomId, { on: true, count: aim.count })
 }
+function closeTimerFunction(data: any) {
+  if (!Aimcount) return
+  const aim = data.data
+  if (Aimcount.has(aim.roomId)) {
+    Aimcount.get(aim.roomId)!.on = false
+  }
+}
 
 export function addAllRoomEvent(
   aim: ReturnType<typeof createAllRoomMap>,
@@ -44,6 +51,7 @@ export function addAllRoomEvent(
   myWebsocketClient.on('roomDel', roomDel)
   myWebsocketClient.on('roomAdd', roomAdd)
   myWebsocketClient.on('roomWillDel', roomWillDel)
+  myWebsocketClient.on('closeTimer', closeTimerFunction)
 }
 
 function delAllRoomEvent() {
@@ -51,4 +59,5 @@ function delAllRoomEvent() {
   myWebsocketClient.off('roomDel', roomDel)
   myWebsocketClient.off('roomAdd', roomAdd)
   myWebsocketClient.off('roomWillDel', roomWillDel)
+  myWebsocketClient.off('closeTimer', closeTimerFunction)
 }
