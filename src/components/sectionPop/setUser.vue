@@ -59,6 +59,10 @@ import AvatarCropper from './AvatarCropper.vue'
 import { compressImage } from '@/utils/jpgZip'
 import { request } from '@/api'
 import { addBaseMessager } from '@/models'
+import userDataStore from '@/stores/userDataStores'
+const userData = userDataStore()
+const mydata = userData.getMyUserData()
+
 
 const emit = defineEmits<{ close: [] }>()
 
@@ -121,8 +125,14 @@ const saveUserInfo = async () => {
   }
   isReqIng.value = true
   try {
-    // await request('api/updateNickname', 'POST', { nickname: nickname.value })
-    addBaseMessager('保存成功')
+    const res = await request<{ nickname: string }>('api/updateNickname', 'POST', { nickname: nickname.value }, true)
+
+    if (res.code === 200) {
+      addBaseMessager('保存成功')
+      userData.changeMyName(res.data.nickname)
+    } else {
+      addBaseMessager(res.message)
+    }
     emit('close')
   } catch (err) {
     console.error(err)
@@ -133,9 +143,7 @@ const saveUserInfo = async () => {
 //初始化
 import { onMounted } from 'vue'
 import { URLSERVER } from '@/api'
-import userDataStore from '@/stores/userDataStores'
-const userData = userDataStore()
-const mydata = userData.getMyUserData()
+
 onMounted(() => {
   try {
     nickname.value = mydata.value.userName

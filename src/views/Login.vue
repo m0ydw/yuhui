@@ -173,10 +173,10 @@ const loginForm = reactive({
 })
 
 const registerForm = reactive({
-  name: '111111',
-  email: '3181001076@qq.com',
-  password: '11111111111',
-  confirm: '11111111111',
+  name: '',
+  email: '',
+  password: '',
+  confirm: '',
 })
 
 const forgotForm = reactive({
