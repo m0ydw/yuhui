@@ -128,7 +128,7 @@ export class WebSocketClient {
         case 1013:
           pop?.value.open(LoginOther)
           break
-        case 1006:
+        default:
           pop?.value.open(unknowErr)
       }
       this.isConnecting = false
@@ -144,6 +144,12 @@ export class WebSocketClient {
       if (this.ws !== ws || this.connectionToken !== token) return
       const data = JSON.parse(event.data)
       console.log('收到响应:', data)
+      if (data.type === 'ping') {
+        console.log('收到心跳请求，发送响应')
+        // 发送pong响应
+        ws.send(JSON.stringify({ type: 'pong' }))
+        return
+      }
 
       // 1. 优先处理等待中的 Promise
       const pending = this.pendingPromises.get(data.type)
